@@ -73,6 +73,9 @@ properties([
         ])
 ])
 
+
+WS = ""
+
 if (params.PRODUCT.length() <= 1) {
     PRODUCT = REPO
 }
@@ -175,18 +178,20 @@ specRef = "+refs/heads/*:refs/remotes/origin/*"
 if (params.GIT_PR.length() >= 1) {
    specRef = "+refs/pull/${GIT_PR}/*:refs/remotes/origin/pr/${GIT_PR}/*"
 }
-def checkoutCode() {
+def checkoutCode(hash,repo) {
     checkout changelog: false, poll: true,
-                    scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
+                    scm: [$class: 'GitSCM', branches: [[name: "${hash}"]], doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
                                     [$class: 'CloneOption', timeout: 60],
                                     [$class: 'PruneStaleBranch'],
                                     [$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
                                     [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
-                        userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
+                        userRemoteConfigs: [[credentialsId: 'guoyu-test-ssh',
                                             refspec      : specRef,
                                             url          : repo]]]
-    sh "git checkout ${GIT_HASH}"
+    if (repo != "git@github.com:PingCAP-CBG/tidb-dashboard-distro.git") {
+        sh "git checkout ${GIT_HASH}"
+    }
 }
 
 
@@ -213,35 +218,14 @@ fi;
 if [ ${EDITION} == 'enterprise' ]; then
     export TIDB_EDITION=Enterprise
 fi;
+sed -i 's/# LDFLAGS/LDFLAGS/g' Makefile.common
+sed -i 's/UbiSQL-v1.0.0-rc1/YiDB/g' Makefile.common
 if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 make clean
-git checkout .
 if [ ${failpoint} == 'true' ]; then
-    make failpoint-enable
-fi;
-if [ ${OS} == 'linux' ]; then
-    WITH_RACE=1 make && mv bin/tidb-server bin/tidb-server-race
-    git checkout .
-    WITH_CHECK=1 make && mv bin/tidb-server bin/tidb-server-check
-    git checkout .
-    make failpoint-enable && make server && mv bin/tidb-server{,-failpoint} && make failpoint-disable
-    git checkout .
-    make server_coverage || true
-    git checkout .
-    if [ \$(grep -E '^ddltest:' Makefile) ]; then
-        git checkout .
-        make ddltest
-    fi
-        
-    if [ \$(grep -E '^importer:' Makefile) ]; then
-        git checkout .
-        make importer
-    fi
-fi;
-if [ ${failpoint} == 'true' ]; then
-    make failpoint-enable
+    make failpoint-enable   
 fi;
 make 
 rm -rf ${TARGET}
@@ -286,8 +270,7 @@ fi;
 if [ ${failpoint} == 'true' ]; then
     make failpoint-enable
 fi;
-make
-make tools
+DASHBOARD_DISTRIBUTION_DIR=\${ws}/resource/yidb make pd-server
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin    
 cp bin/* ${TARGET}/bin/   
@@ -500,6 +483,13 @@ rm -rf ${TARGET}
 mkdir ${TARGET}/bin
 """
 
+buildsh["tiem"] = """
+if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+    export PATH=${binPath}
+fi;
+make 
+"""
+
 def packageBinary() {
     //  pd,tidb,tidb-test 非release版本，和代码一起打包
     if ((PRODUCT == "pd" || PRODUCT == "tidb" || PRODUCT == "tidb-test" ) && RELEASE_TAG.length() < 1) {
@@ -521,10 +511,44 @@ def release() {
     if (ifFileCacheExists()) {
         return
     }
-    checkoutCode()
+    checkoutCode(GIT_HASH,repo)
+    def WS = pwd()
+    dir("resource") {
+        checkoutCode("main","git@github.com:PingCAP-CBG/tidb-dashboard-distro.git")
+    }
     // some build need this token.
     withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
-        sh buildsh[params.PRODUCT]
+        if (repo == "pd") {
+            sh """
+            sudo yum install java-1.8.0-openjdk-devel -y
+            wget https://nodejs.org/dist/v12.22.6/node-v12.22.6-linux-x64.tar.gz
+            tar -xvf node-v12.22.6-linux-x64.tar.gz
+            export PATH=\$PATH:${WS}/node-v12.22.6-linux-x64/bin
+            ls -l ${WS}/node-v12.22.6-linux-x64/bin
+            sudo echo \$PATH
+            npm install -g yarn
+
+            if [ ${RELEASE_TAG}x != ''x ];then
+                for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
+                git tag -f ${RELEASE_TAG} ${GIT_HASH}
+                git branch -D refs/tags/${RELEASE_TAG} || true
+                git checkout -b refs/tags/${RELEASE_TAG}
+            fi;
+            git checkout .
+            if [ ${EDITION} == 'enterprise' ]; then
+                export TIDB_EDITION=Enterprise
+            fi;
+            if [ ${failpoint} == 'true' ]; then
+                make failpoint-enable
+            fi;
+            DASHBOARD_DISTRIBUTION_DIR=${WS}/resource/yidb make pd-server
+            rm -rf ${TARGET}
+            mkdir -p ${TARGET}/bin    
+            cp bin/* ${TARGET}/bin/   
+            """
+        }else {
+            sh buildsh[params.PRODUCT]
+        }
     }
     packageBinary()
 }
