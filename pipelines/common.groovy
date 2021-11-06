@@ -208,7 +208,7 @@ def codeCyclo(cycloConfig,repo,commitID) {
             string(name: 'CACHE_CODE_FILESERVER_URL', value: cacheCodeUrl),
             text(name: 'CYCLO_CMD', value: cycloConfig.shellScript),
     ]
-    result = triggerTask("atom-cyclo",cycloParams)
+    result = triggerTask("debug-atom-cyclo",cycloParams)
 
     return result
 }
