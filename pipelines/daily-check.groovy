@@ -27,6 +27,7 @@ def configfile = "https://raw.githubusercontent.com/PingCAP-QE/devops-config/mas
 
 def runtasks(branch,repo,commitID,tasks,common) {
     jobs = [:]
+    task_result_array = []
     for (task in tasks) {
         taskType = task.taskType.toString()
         taskName =task.name.toString()
@@ -34,7 +35,9 @@ def runtasks(branch,repo,commitID,tasks,common) {
             case "build":
                 def buildConfig = common.parseBuildConfig(task)
                 jobs[taskName] = {
-                    common.buildBinary(buildConfig,repo,commitID)
+                    result = common.buildBinary(buildConfig,repo,commitID
+                    task_result_array.add({"name": taskName,
+                                            "result": result})
                 }
                 break
             case "unit-test":
@@ -52,7 +55,9 @@ def runtasks(branch,repo,commitID,tasks,common) {
             case "cyclo": 
                 def cycloConfig = common.parseCycloConfig(task)
                 jobs[taskName] = {
-                    common.codeCyclo(cycloConfig,repo,commitID)
+                    result = common.codeCyclo(cycloConfig,repo,commitID)
+                    task_result_array.add({"name": taskName,
+                                            "result": result})
                 }
                 break
             case "gosec":
@@ -70,6 +75,8 @@ def runtasks(branch,repo,commitID,tasks,common) {
         }
     }
     parallel jobs
+
+    return task_result_array
 }
 
 node("${GO_BUILD_SLAVE}") {
@@ -79,19 +86,27 @@ node("${GO_BUILD_SLAVE}") {
         configs = common.getConfig(configfile)
         refs  = configs.defaultRefs
         taskFailed = false
+        task_result_array = []
         for (ref in refs) {
             def commitID = get_sha(ref)
             try {
                 stage("verify: " + ref) {
                     common.cacheCode(REPO,commitID,ref,"")
-                    runtasks(ref,repo,commitID,configs.tasks,common) 
+                    task_result_array = runtasks(ref,repo,commitID,configs.tasks,common) 
                 }     
             } catch (Exception e) {
                 taskFailed = true
             }           
         }
-        if (taskFailed) {
-            throw new RuntimeException("task failed")
+
+        for (task_result in task_result_array) {
+            echo task_result.getAbsoluteUrl()
+            echo task_result.getResult()
         }
+
+        
+        // if (taskFailed) {
+        //     throw new RuntimeException("task failed")
+        // }
     }
 }
