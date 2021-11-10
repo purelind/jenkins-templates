@@ -56,7 +56,7 @@ def runtasks(branch,repo,commitID,tasks,common) {
             case "cyclo": 
                 def cycloConfig = common.parseCycloConfig(task)
                 jobs[taskName] = {
-                    result_map = common.codeLint(cycloConfig,repo,commitID)
+                    result_map = common.codeCyclo(cycloConfig,repo,commitID)
                     task_result_array << result_map
                 }
                 break
