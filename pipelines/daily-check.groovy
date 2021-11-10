@@ -97,7 +97,8 @@ node("${GO_BUILD_SLAVE}") {
             def commitID = get_sha(ref)
             try {
                 stage("Branch: " + ref) {
-                    common.cacheCode(REPO,commitID,ref,"")
+                    // TODO: debug daily-check.groovy
+                    // common.cacheCode(REPO,commitID,ref,"")
                     task_result_array = runtasks(ref,repo,commitID,configs.tasks,common) 
                 }     
             } catch (Exception e) {

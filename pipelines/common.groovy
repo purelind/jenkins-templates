@@ -123,7 +123,7 @@ def triggerTask(taskName, taskType, params) {
     } else {
         println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
     }
-    println("${taskName} ${result.getResult()}: result.getDescription()")
+    println("${taskName} ${result.getResult()}: ${result.getDescription()}")
 
     def resp_map = {}
     resp_map["name"] = taskName
