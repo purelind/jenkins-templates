@@ -119,9 +119,9 @@ def parseCommonConfig(config) {
 def triggerTask(taskName, taskType, params) {
     result = build(job: taskName, parameters: params, wait: true,propagate: false)
     if (result.getResult() != "SUCCESS" && taskType in ["unitTest", "gosec"]) {
-        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getBuildNumber()}/tests")
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
     } else {
-        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getBuildNumber()}/pipeline")
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
     }
     println("${taskName} ${result.getResult()}: result.getDescription()")
 
