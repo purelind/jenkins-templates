@@ -103,6 +103,12 @@ try {
                     wget ${FILE_SERVER_URL}/download/rd-index-agent/repo_cyclo/tiinsight-agent-cyclo.py
                     python3 tiinsight-agent-cyclo.py ${REPO} "master" ${COMMIT_ID} repo_cyclo.log
                     """
+                    sh """
+                    wget https://raw.githubusercontent.com/purelind/test-ci/main/tinotify_parse_gocyclo.py
+                    python3 tinotify_parse_gocyclo.py repo_cyclo.log
+                    """
+                    ENV_CYCLO_SUMMARY = sh(script: "cat task_cyclo_summary.info", returnStdout: true)
+                    currentBuild.description = "${ENV_CYCLO_RESULT}"
                 }
             }
             currentBuild.result = "SUCCESS"

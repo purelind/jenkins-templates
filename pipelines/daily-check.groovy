@@ -25,8 +25,18 @@ def get_sha(branch) {
 def configfile = "https://raw.githubusercontent.com/PingCAP-QE/devops-config/master/${repo}/daily.yaml"
 
 
+def parse_sub_task_result(result_object) {
+    def absoulteUrl = result_object.getAbsoluteUrl()
+    def fullProjectName = result_object.getFullProjectName()
+    def buildNumber = result_object.getBuildNumber()
+
+
+}
+
+
 def runtasks(branch,repo,commitID,tasks,common) {
     jobs = [:]
+    def task_result_array = []
     for (task in tasks) {
         taskType = task.taskType.toString()
         taskName =task.name.toString()
@@ -34,42 +44,50 @@ def runtasks(branch,repo,commitID,tasks,common) {
             case "build":
                 def buildConfig = common.parseBuildConfig(task)
                 jobs[taskName] = {
-                    common.buildBinary(buildConfig,repo,commitID)
+                    result_map = common.buildBinary(buildConfig,repo,commitID)
+                    task_result_array << result_map
                 }
                 break
             case "unit-test":
                 def unitTestConfig = common.parseUnitTestConfig(task)
                 jobs[taskName] = {
-                    common.unitTest(unitTestConfig,repo,commitID)
+                    result_map = common.unitTest(unitTestConfig,repo,commitID)
+                    task_result_array << result_map
                 }
                 break
             case "lint":
                 def lintConfig = common.parseLintConfig(task)
                 jobs[taskName] = {
                     common.codeLint(lintConfig,repo,commitID)
+                    task_result_array << result_map
                 }
                 break
             case "cyclo": 
                 def cycloConfig = common.parseCycloConfig(task)
                 jobs[taskName] = {
-                    common.codeCyclo(cycloConfig,repo,commitID)
+                    result_map = common.codeLint(cycloConfig,repo,commitID)
+                    task_result_array << result_map
                 }
                 break
             case "gosec":
                 def gosecConfig = common.parseGosecConfig(task)
                 jobs[taskName] = {
                     common.codeGosec(gosecConfig,repo,commitID)
+                    task_result_array << result_map
                 }
                 break
             case "common":
                 def commonConfig = common.parseCommonConfig(task)
                 jobs[taskName] = {
                     common.codeCommon(commonConfig,repo,commitID,branch)
+                    task_result_array << result_map
                 }
                 break
         }
     }
     parallel jobs
+
+    return task_result_array
 }
 
 node("${GO_BUILD_SLAVE}") {
@@ -80,18 +98,33 @@ node("${GO_BUILD_SLAVE}") {
         refs  = configs.defaultRefs
         taskFailed = false
         for (ref in refs) {
+            def task_result_array = []
             def commitID = get_sha(ref)
             try {
-                stage("verify: " + ref) {
+                stage("Branch: " + ref) {
                     common.cacheCode(REPO,commitID,ref,"")
-                    runtasks(ref,repo,commitID,configs.tasks,common) 
+                    task_result_array = runtasks(ref,repo,commitID,configs.tasks,common) 
                 }     
             } catch (Exception e) {
                 taskFailed = true
-            }           
+            }  finally {
+                stage("Summary") {
+                   for (result_map in task_result_array) {
+                    if (result_map.taskResult != "SUCCESS") {
+                        taskFailed = true
+                    }
+                    if (result_map.taskSummary != null && result_map.taskSummary != "") {
+                        println("${result_map.name} ${result_map.taskResult}: ${result_map.taskSummary}")
+                        println("${result_map.name} #${result_map.buildNumber}: ${result_map.url}")
+                    }
+                    
+                } 
+                }
+                
+            }         
         }
         if (taskFailed) {
-            throw new RuntimeException("task failed")
+            currentBuild.result = "FAILURE"
         }
     }
 }
