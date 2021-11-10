@@ -25,15 +25,6 @@ def get_sha(branch) {
 def configfile = "https://raw.githubusercontent.com/PingCAP-QE/devops-config/master/${repo}/daily.yaml"
 
 
-def parse_sub_task_result(result_object) {
-    def absoulteUrl = result_object.getAbsoluteUrl()
-    def fullProjectName = result_object.getFullProjectName()
-    def buildNumber = result_object.getBuildNumber()
-
-
-}
-
-
 def runtasks(branch,repo,commitID,tasks,common) {
     jobs = [:]
     def task_result_array = []
@@ -107,6 +98,7 @@ node("${GO_BUILD_SLAVE}") {
                 }     
             } catch (Exception e) {
                 taskFailed = true
+                throw e
             }  finally {
                 stage("Summary") {
                    for (result_map in task_result_array) {
