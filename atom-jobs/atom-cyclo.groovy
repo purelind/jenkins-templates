@@ -103,6 +103,8 @@ try {
                     wget ${FILE_SERVER_URL}/download/rd-index-agent/repo_cyclo/tiinsight-agent-cyclo.py
                     python3 tiinsight-agent-cyclo.py ${REPO} "master" ${COMMIT_ID} repo_cyclo.log
                     """
+
+                    // TODO replace python script download path
                     sh """
                     wget https://raw.githubusercontent.com/purelind/test-ci/main/tinotify_parse_gocyclo.py
                     python3 tinotify_parse_gocyclo.py repo_cyclo.log
