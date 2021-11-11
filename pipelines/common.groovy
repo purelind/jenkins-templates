@@ -129,7 +129,6 @@ def triggerTask(taskName, taskType, params) {
         println("${taskName} ${result.getResult()}")
     }
     
-
     def resp_map = {}
     resp_map["name"] = taskName
     resp_map["taskType"] = taskType
@@ -138,8 +137,6 @@ def triggerTask(taskName, taskType, params) {
     resp_map["resultObject"] = result
     resp_map["buildNumber"] = result.getNumber().toString()
     resp_map["url"] = "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}"
-
-    
 
     return resp_map
 }
