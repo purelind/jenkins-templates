@@ -107,15 +107,14 @@ node("${GO_BUILD_SLAVE}") {
             }  finally {
                 stage("Summary") {
                    for (result_map in task_result_array) {
-                    if (result_map.taskResult != "SUCCESS") {
-                        taskFailed = true
-                    }
-                    if (result_map.taskSummary != null && result_map.taskSummary != "") {
-                        println("${result_map.name} ${result_map.taskResult}: ${result_map.taskSummary}")
-                        println("${result_map.name} #${result_map.buildNumber}: ${result_map.url}")
-                    }
-                    
-                } 
+                        if (result_map.taskResult != "SUCCESS") {
+                            taskFailed = true
+                        }
+                        if (result_map.taskSummary != null && result_map.taskSummary != "") {
+                            println("${result_map.name} ${result_map.taskResult}: ${result_map.taskSummary}")
+                            println("${result_map.name} #${result_map.buildNumber}: ${result_map.url}")
+                        }
+                    } 
                 }
                 
             }         
