@@ -24,10 +24,11 @@ def get_sha(branch) {
 
 def configfile = "https://raw.githubusercontent.com/PingCAP-QE/devops-config/master/${repo}/daily.yaml"
 
+task_result_array = []
 
 def runtasks(branch,repo,commitID,tasks,common) {
     jobs = [:]
-    def task_result_array = []
+    
     for (task in tasks) {
         taskType = task.taskType.toString()
         taskName =task.name.toString()
@@ -35,50 +36,67 @@ def runtasks(branch,repo,commitID,tasks,common) {
             case "build":
                 def buildConfig = common.parseBuildConfig(task)
                 jobs[taskName] = {
-                    result_map = common.buildBinary(buildConfig,repo,commitID)
+                    def result_map = common.buildBinary(buildConfig,repo,commitID)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
             case "unit-test":
                 def unitTestConfig = common.parseUnitTestConfig(task)
                 jobs[taskName] = {
-                    result_map = common.unitTest(unitTestConfig,repo,commitID)
+                    def result_map = common.unitTest(unitTestConfig,repo,commitID)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
             case "lint":
                 def lintConfig = common.parseLintConfig(task)
                 jobs[taskName] = {
-                    common.codeLint(lintConfig,repo,commitID)
+                    def result_map = common.codeLint(lintConfig,repo,commitID)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
             case "cyclo": 
                 def cycloConfig = common.parseCycloConfig(task)
                 jobs[taskName] = {
-                    result_map = common.codeCyclo(cycloConfig,repo,commitID)
+                    def result_map = common.codeCyclo(cycloConfig,repo,commitID)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
             case "gosec":
                 def gosecConfig = common.parseGosecConfig(task)
                 jobs[taskName] = {
-                    common.codeGosec(gosecConfig,repo,commitID)
+                    def result_map = common.codeGosec(gosecConfig,repo,commitID)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
             case "common":
                 def commonConfig = common.parseCommonConfig(task)
                 jobs[taskName] = {
-                    common.codeCommon(commonConfig,repo,commitID,branch)
+                    def result_map = common.codeCommon(commonConfig,repo,commitID,branch)
                     task_result_array << result_map
+                    if (result_map.taskResult != "SUCCESS") {
+                        throw new Exception("task failed")
+                    }
                 }
                 break
         }
     }
     parallel jobs
 
-    return task_result_array
 }
 
 node("${GO_BUILD_SLAVE}") {
@@ -93,20 +111,20 @@ node("${GO_BUILD_SLAVE}") {
         refs  = configs.defaultRefs
         taskFailed = false
         for (ref in refs) {
-            def task_result_array = []
+            
             def commitID = get_sha(ref)
             try {
                 stage("Branch: " + ref) {
                     // TODO: debug daily-check.groovy
                     // common.cacheCode(REPO,commitID,ref,"")
-                    task_result_array = runtasks(ref,repo,commitID,configs.tasks,common) 
+                    runtasks(ref,repo,commitID,configs.tasks,common) 
                 }     
             } catch (Exception e) {
                 taskFailed = true
-                throw e
             }  finally {
                 stage("Summary") {
-                   for (result_map in task_result_array) {
+                    println task_result_array
+                    for (result_map in task_result_array) {
                         if (result_map.taskResult != "SUCCESS") {
                             taskFailed = true
                         }
