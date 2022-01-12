@@ -1,0 +1,29 @@
+properties([
+        parameters([
+                string(
+                        defaultValue: '',
+                        name: 'PIPELINE_YAML',
+                        trim: true
+                ),
+        ])
+])
+
+def get_sha(repo,branch) {
+    sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
+    return sh(returnStdout: true, script: "python gethash.py -repo=${repo} -version=${branch} -s=${FILE_SERVER_URL}").trim()
+}
+
+common = {}
+commitID = ""
+PipelineSpec pipelineSpec =  new PipelineSpec()
+node("${GO1160_BUILD_SLAVE}") {
+    container("golang") {
+        checkout scm
+        common = load "tipipeline/common.groovy"
+        pipelineSpec = comloadPipelineConfig(PIPELINE_YAML)
+        commitID = get_sha(pipelineSpec.repo,pipelineSpec.defaultRef)
+    }
+}
+
+pipelineSpec = comloadPipelineConfig(PIPELINE_YAML)
+runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, String commitID, "")
