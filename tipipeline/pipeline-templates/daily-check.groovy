@@ -21,8 +21,11 @@ node("${GO1160_BUILD_SLAVE}") {
         // checkout scm
         // common = load "tipipeline/common.groovy"
 
+        // sh """
+        // wget https://raw.githubusercontent.com/purelind/jenkins-templates/purelind/refactor-init-test-fix/tipipeline/common.groovy
+        // """
         sh """
-        wget https://raw.githubusercontent.com/purelind/jenkins-templates/purelind/refactor-init-test-fix/tipipeline/common.groovy
+        wget http://fileserver.pingcap.net/download/cicd/debug/common.groovy
         """
         common = load "common.groovy"
 
