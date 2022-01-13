@@ -206,21 +206,23 @@ def runWithPod(TaskSpec config, Closure body) {
                     nfsVolume(mountPath: '/nfs/cache', serverAddress: '172.16.5.22',
                             serverPath: '/mnt/ci.pingcap.net-nfs', readOnly: false),
             ],
-    ) 
-    timeout(time: config.timeout, unit: 'MINUTES') {
-        retry(config.retry){
-            {
-                node(label) {
-                    container("node") {
-                        updateTaskStatus("running",config)
-                        println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
-                        status = body(config)
-                        updateTaskStatus(status,config)
+    ) {
+        timeout(time: config.timeout, unit: 'MINUTES') {
+            retry(config.retry){
+                {
+                    node(label) {
+                        container("node") {
+                            updateTaskStatus("running",config)
+                            println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
+                            status = body(config)
+                            updateTaskStatus(status,config)
+                        }
                     }
                 }
             }
         }
     }
+    
 }
 
 
