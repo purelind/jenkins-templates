@@ -69,7 +69,7 @@ def loadPipelineConfig(fileURL) {
     objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,false)
     yamlRequest = httpRequest url: fileURL, httpMode: 'GET'
     PipelineSpec pipelineSpec = objectMapper.readValue(yamlRequest.content, PipelineSpec.class)
-    repoInfo = pipelineSpec.split("/")
+    repoInfo = pipelineSpec.repo.split("/")
     if (repoInfo.length==2){
         pipelineSpec.owner = repoInfo[0]
         pipelineSpec.repo = repoInfo[1]
@@ -82,10 +82,23 @@ def createPipelineRun(PipelineSpec pipeline) {
     // create pipelinerun to tipipeline and get pipeline_id, task_id
 }
 
-def createPipelineRun(PipelineSpec pipeline) {
-    // update pipelinerun to tipipeline by pipeline_id
-}
 
+def triggerTask(taskName,params) {
+    result = build(job: taskName, parameters: params, wait: true,propagate: false)
+
+    if (result.getResult() != "SUCCESS" && taskName in ["atom-ut", "atom-gosec"]) {
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
+    } else {
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
+    }
+    if (result.getDescription() != null && result.getDescription() != "") {
+        println("task ${result.getResult()}: ${result.getDescription()}")
+    } else {
+        println("task ${result.getResult()}")
+    }
+
+    return result
+}
 
 def cacheCode(repo,commitID,branch,prID) {
     cacheCodeParams = [
@@ -206,10 +219,9 @@ def runWithPod(TaskSpec config, Closure body) {
                     nfsVolume(mountPath: '/nfs/cache', serverAddress: '172.16.5.22',
                             serverPath: '/mnt/ci.pingcap.net-nfs', readOnly: false),
             ],
-    ) 
-    timeout(time: config.timeout, unit: 'MINUTES') {
-        retry(config.retry){
-            {
+    ) {
+        timeout(time: config.timeout, unit: 'MINUTES') {
+            retry(config.retry){
                 node(label) {
                     container("node") {
                         updateTaskStatus("running",config)
@@ -221,6 +233,7 @@ def runWithPod(TaskSpec config, Closure body) {
             }
         }
     }
+    
 }
 
 
