@@ -69,7 +69,7 @@ def loadPipelineConfig(fileURL) {
     objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,false)
     yamlRequest = httpRequest url: fileURL, httpMode: 'GET'
     PipelineSpec pipelineSpec = objectMapper.readValue(yamlRequest.content, PipelineSpec.class)
-    repoInfo = pipelineSpec.split("/")
+    repoInfo = pipelineSpec.repo.split("/")
     if (repoInfo.length==2){
         pipelineSpec.owner = repoInfo[0]
         pipelineSpec.repo = repoInfo[1]
