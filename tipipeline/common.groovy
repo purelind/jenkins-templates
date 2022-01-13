@@ -83,6 +83,23 @@ def createPipelineRun(PipelineSpec pipeline) {
 }
 
 
+def triggerTask(taskName,params) {
+    result = build(job: taskName, parameters: params, wait: true,propagate: false)
+
+    if (result.getResult() != "SUCCESS" && taskName in ["atom-ut", "atom-gosec"]) {
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
+    } else {
+        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
+    }
+    if (result.getDescription() != null && result.getDescription() != "") {
+        println("task ${result.getResult()}: ${result.getDescription()}")
+    } else {
+        println("task ${result.getResult()}")
+    }
+
+    return result
+}
+
 def cacheCode(repo,commitID,branch,prID) {
     cacheCodeParams = [
         string(name: 'ORG_AND_REPO', value: repo),
