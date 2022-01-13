@@ -209,14 +209,12 @@ def runWithPod(TaskSpec config, Closure body) {
     ) {
         timeout(time: config.timeout, unit: 'MINUTES') {
             retry(config.retry){
-                {
-                    node(label) {
-                        container("node") {
-                            updateTaskStatus("running",config)
-                            println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
-                            status = body(config)
-                            updateTaskStatus(status,config)
-                        }
+                node(label) {
+                    container("node") {
+                        updateTaskStatus("running",config)
+                        println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
+                        status = body(config)
+                        updateTaskStatus(status,config)
                     }
                 }
             }
