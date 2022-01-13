@@ -82,10 +82,6 @@ def createPipelineRun(PipelineSpec pipeline) {
     // create pipelinerun to tipipeline and get pipeline_id, task_id
 }
 
-def createPipelineRun(PipelineSpec pipeline) {
-    // update pipelinerun to tipipeline by pipeline_id
-}
-
 
 def cacheCode(repo,commitID,branch,prID) {
     cacheCodeParams = [
