@@ -28,6 +28,10 @@ node("lightweight_pod") {
 
         pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML)
         commitID = get_sha(pipelineSpec.repo,pipelineSpec.defaultRef)
+        println "commitID: ${commitID}"
+        if (commitID == "" || commitID == null) {
+            throw "commitID is empty"
+        }
         common.runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, commitID, "")
     }
 }
