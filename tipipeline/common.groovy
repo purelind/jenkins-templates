@@ -197,14 +197,14 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
                 notify_results_array << [
                     name: originTask.taskName, 
                     checkName: originTask.checkerName,
-                    result: originTask.getResult(), 
-                    fullDisplayName: originTask.getFullDisplayName(), 
-                    buildNumber: originTask.getNumber().toString(),
-                    summary: originTask.getDescription(),
-                    durationStr: originTask.getDurationString(),
-                    duration: originTask.getDuration(),
-                    startTime: originTask.getStartTimeInMillis(),
-                    url: "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${originTask.getFullProjectName()}/detail/${originTask.getFullProjectName()}/${originTask.getNumber().toString()}/pipeline"
+                    result: result.getResult(), 
+                    fullDisplayName: result.getFullDisplayName(), 
+                    buildNumber: result.getNumber().toString(),
+                    summary: result.getDescription(),
+                    durationStr: result.getDurationString(),
+                    duration: result.getDuration(),
+                    startTime: result.getStartTimeInMillis(),
+                    url: "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline"
                 ]
                 if (result.getResult() != "SUCCESS") {
                     throw new Exception("${originTask.taskName} failed")
