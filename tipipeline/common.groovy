@@ -137,17 +137,20 @@ def triggerTask(taskName,params) {
 }
 
 def cacheCode(repo,commitID,branch,prID) {
-    cacheCodeParams = [
-        string(name: 'ORG_AND_REPO', value: repo),
-        string(name: 'COMMIT_ID', value: commitID),
-    ]
-    if (branch != "" && branch != null ) {
-        cacheCodeParams.push(string(name: 'BRANCH', value: branch))
+    stage("cache code") {
+        println("cache code: ${repo} ${commitID} ${branch} ${prID}")
+        cacheCodeParams = [
+            string(name: 'ORG_AND_REPO', value: repo),
+            string(name: 'COMMIT_ID', value: commitID),
+        ]
+        if (branch != "" && branch != null ) {
+            cacheCodeParams.push(string(name: 'BRANCH', value: branch))
+        }
+        if (prID != "" && prID != null ) {
+            cacheCodeParams.push(string(name: 'PULL_ID', value: prID))
+        }
+        triggerTask("cache-code",cacheCodeParams)
     }
-    if (prID != "" && prID != null ) {
-        cacheCodeParams.push(string(name: 'PULL_ID', value: prID))
-    }
-    triggerTask("cache-code",cacheCodeParams)
 }
 
 
@@ -166,7 +169,7 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
         for (task in pipeline.tasks) {
             def originTask = task
             jobs[task.taskName] = {
-                def cacheCodeUrl = "${FILE_SERVER_URL}/download/builds/pingcap/devops/cachecode/${pipeline.repo}/${commitID}/${pipeline.repo}.tar.gz"
+                def cacheCodeUrl = "${FILE_SERVER_URL}/download/builds/pingcap/devops/cachecode/${pipeline.repo}/${pipeline.commitID}/${pipeline.repo}.tar.gz"
                 originTask.pipelineName = pipeline.pipelineName
                 originTask.triggerEvent = triggerEvent
                 originTask.branch = branch 
@@ -181,7 +184,7 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
                 string(name: "INPUT_JSON", value: taskJsonString),
                 ]
                 def result = build(job: originTask.checkerName, parameters: params, wait: true, propagate: false)
-                if (result.getResult() != "SUCCESS" && taskName in ["ut-check", "gosec-check"]) {
+                if (result.getResult() != "SUCCESS" && originTask.taskName in ["ut-check", "gosec-check"]) {
                     println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
                 } else {
                     println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
