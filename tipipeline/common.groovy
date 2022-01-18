@@ -139,17 +139,26 @@ def triggerTask(taskName,params) {
 def cacheCode(repo,commitID,branch,prID) {
     stage("cache code") {
         println("cache code: ${repo} ${commitID} ${branch} ${prID}")
-        cacheCodeParams = [
-            string(name: 'ORG_AND_REPO', value: repo),
-            string(name: 'COMMIT_ID', value: commitID),
-        ]
-        if (branch != "" && branch != null ) {
-            cacheCodeParams.push(string(name: 'BRANCH', value: branch))
+        def cacheCodeUrl = "${FILE_SERVER_URL}/download/builds/pingcap/devops/cachecode/${repo}/${commitID}/${repo}.tar.gz"
+        cacheAlreadyExist = sh(returnStatus: true, script: """
+                if curl --output /dev/null --silent --head --fail ${cacheCodeUrl}; then exit 0; else exit 1; fi
+                """)
+        if (cacheAlreadyExist == 0) {
+            println("cache already exist: ${cacheCodeUrl}")
+        } else {
+            println("start cache-code pipeline")
+            cacheCodeParams = [
+                string(name: 'ORG_AND_REPO', value: repo),
+                string(name: 'COMMIT_ID', value: commitID),
+            ]
+            if (branch != "" && branch != null ) {
+                cacheCodeParams.push(string(name: 'BRANCH', value: branch))
+            }
+            if (prID != "" && prID != null ) {
+                cacheCodeParams.push(string(name: 'PULL_ID', value: prID))
+            }
+            triggerTask("cache-code",cacheCodeParams)
         }
-        if (prID != "" && prID != null ) {
-            cacheCodeParams.push(string(name: 'PULL_ID', value: prID))
-        }
-        triggerTask("cache-code",cacheCodeParams)
     }
 }
 
@@ -219,7 +228,6 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
         updatePipelineRun(pipeline)
         println("Pipeline ${pipeline.pipelineName} failed")
         println("error: ${e.getMessage()}")
-        currentBuild.result = "FAILURE"
     } finally {
 
         println("Pipeline ${pipeline.pipelineName} finished")
