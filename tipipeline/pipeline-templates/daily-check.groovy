@@ -31,4 +31,4 @@ node("lightweight_pod") {
     }
 }
 
-common.runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, String commitID, "")
+common.runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, commitID, "")
