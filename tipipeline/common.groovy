@@ -230,42 +230,36 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             updatePipelineRun(pipeline)
             currentBuild.result = "SUCCESS"
         }
-        if (notify_results_array.length > 0) {
-            // notify_results_array.sort {
-            //     if (it.startTime > it.startTime) {
-            //         return 1
-            //     } else {
-            //         return -1
-            //     }
-            // }
-            notify_results_array << [
-                name: pipeline.pipelineName,
-                result: currentBuild.result,
-                buildNumber: BUILD_NUMBER,
-                type: "TiPipeline",
-                commitID: pipeline.commitID, 
-                branch: pipeline.branch,
-                pullRequest: pipeline.pullRequest,
-                repo: pipeline.repo,
-                org: pipeline.owner,
-                url: RUN_DISPLAY_URL, 
-                startTime: taskStartTimeInMillis, 
-                duration: System.currentTimeMillis() - taskStartTimeInMillis,
-                triggerEvent: pipeline.triggerEvent,
-                receiver_lark: pipeline.notify.lark,
-                receiver_email: pipeline.notify.email,
-            ]
-            def resultJson = groovy.json.JsonOutput.toJson(notify_results_array)
-            writeJSON file: 'ciResult.json', json: resultJson, pretty: 4
-            sh 'cat ciResult.json'
-            archiveArtifacts artifacts: 'ciResult.json', fingerprint: true
-            // if (currentBuild.result == "FAILURE") {
-            //     sh """
-            //         wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline-ci.py
-            //         python3 agent-tipipeline-ci.py ciResult.json
-            //     """  
-            // }
-        }
+        println ("notify_results_array: ${notify_results_array}")
+        println ("lenght: ${notify_results_array.length}")
+        notify_results_array << [
+            name: pipeline.pipelineName,
+            result: currentBuild.result,
+            buildNumber: BUILD_NUMBER,
+            type: "TiPipeline",
+            commitID: pipeline.commitID, 
+            branch: pipeline.branch,
+            pullRequest: pipeline.pullRequest,
+            repo: pipeline.repo,
+            org: pipeline.owner,
+            url: RUN_DISPLAY_URL, 
+            startTime: taskStartTimeInMillis, 
+            duration: System.currentTimeMillis() - taskStartTimeInMillis,
+            triggerEvent: pipeline.triggerEvent,
+            receiver_lark: pipeline.notify.lark,
+            receiver_email: pipeline.notify.email,
+        ]
+        def resultJson = groovy.json.JsonOutput.toJson(notify_results_array)
+        writeJSON file: 'ciResult.json', json: resultJson, pretty: 4
+        sh 'cat ciResult.json'
+        archiveArtifacts artifacts: 'ciResult.json', fingerprint: true
+        // if (currentBuild.result == "FAILURE") {
+        //     sh """
+        //         wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline-ci.py
+        //         python3 agent-tipipeline-ci.py ciResult.json
+        //     """  
+        // }
+        
     }
 
 }
