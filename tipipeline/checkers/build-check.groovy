@@ -9,7 +9,7 @@ properties([
 ])
 
 common = {}
-node("${GO1160_BUILD_SLAVE}") {
+node("lightweight_pod") {
     container("golang") {
         checkout scm
         common = load "tipipeline/common.groovy"
@@ -22,9 +22,9 @@ def runBody = {config ->
     }
 
     stage("Download code from fileserver") {
-        sh '''
+        sh """
             wget -q -c ${config.cacheCodeURL} -O - | tar -xz
-        '''
+        """
     }
 
     stage("Build") {
@@ -39,7 +39,7 @@ def runBody = {config ->
         def sha256sumFilepath = "builds/pingcap/devops/atom-build/${config.repo}/${config.commitID}/${config.repo}.tar.gz.sha256sum"
         def outputDir = config.params["outputDir"]
         sh """
-            tar -czf ${config.repo}}.tar.gz ${config.repo}/${outputDir}
+            tar -czf ${config.repo}.tar.gz ${config.repo}/${outputDir}
             sha256sum ${config.repo}.tar.gz > ${config.repo}.tar.gz.sha256sum   
             curl -F ${filepath}=@${config.repo}.tar.gz ${FILE_SERVER_URL}/upload
         """
@@ -51,9 +51,10 @@ def runBody = {config ->
     }
 
     currentBuild.result = "SUCCESS"
+    currentBuild.description = "build success"
 }
 
-taskConfig = common.loadConfig(INPUT_JSON)
+taskConfig = common.loadTaskConfig(INPUT_JSON)
 common.runWithPod(taskConfig,runBody) 
 
 
