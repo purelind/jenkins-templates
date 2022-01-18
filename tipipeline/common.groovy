@@ -238,8 +238,6 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             updatePipelineRun(pipeline)
             currentBuild.result = "SUCCESS"
         }
-        println ("notify_results_array: ${notify_results_array}")
-        println ("lenght: ${notify_results_array.length}")
         notify_results_array << [
             name: pipeline.pipelineName,
             result: currentBuild.result,
