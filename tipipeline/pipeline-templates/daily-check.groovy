@@ -15,6 +15,7 @@ def get_sha(repo,branch) {
 
 common = {}
 commitID = ""
+taskStartTimeInMillis = System.currentTimeMillis()
 
 node("lightweight_pod") {
     container("golang") {
