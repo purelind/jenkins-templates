@@ -22,11 +22,6 @@ node("lightweight_pod") {
         // common = load "common.groovy"
 
         pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML)
-        commitID = ghprbActualCommit
-        println "commitID: ${commitID}"
-        if (commitID == "" || commitID == null) {
-            throw "commitID is empty"
-        }
-        common.runPipeline(pipelineSpec, "verify", ghprbTargetBranch, commitID, ghprbPullId)
+        common.runPipeline(pipelineSpec, "verify", ghprbTargetBranch, ghprbActualCommit, ghprbPullId)
     }
 }
