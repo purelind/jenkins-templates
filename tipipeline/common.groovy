@@ -250,7 +250,14 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
                 trigger = ghprbTriggerAuthorLogin
             }
         }
-
+        def receiver_lark = []
+        def receiver_email = []
+        if (pipeline.notify != null && pipeline.notify.lark != null) {
+            receiver_lark = pipeline.notify.lark
+        }
+        if (pipeline.notify != null && pipeline.notify.email != null) {
+            receiver_email = pipeline.notify.email
+        }
         notify_results_array << [
             name: pipeline.pipelineName,
             result: currentBuild.result,
@@ -265,8 +272,8 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             startTime: taskStartTimeInMillis, 
             duration: System.currentTimeMillis() - taskStartTimeInMillis,
             triggerEvent: pipeline.triggerEvent,
-            receiver_lark: pipeline.notify.lark,
-            receiver_email: pipeline.notify.email,
+            receiver_lark: receiver_lark,
+            receiver_email: receiver_email,
             trigger: trigger,
         ]
         def resultJson = groovy.json.JsonOutput.toJson(notify_results_array)
