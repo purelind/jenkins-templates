@@ -225,7 +225,9 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
         }
         pipeline.status = "running" 
         updatePipelineRun(pipeline)
-        parallel jobs
+        stage(pipeline.triggerEvent) {
+            parallel jobs
+        }
     } catch (Exception e) {
         pipeline.status = "failed"
         updatePipelineRun(pipeline)
