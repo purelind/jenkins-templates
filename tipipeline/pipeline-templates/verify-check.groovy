@@ -1,12 +1,12 @@
-properties([
-        parameters([
-                string(
-                        defaultValue: '',
-                        name: 'PIPELINE_YAML',
-                        trim: true
-                ),
-        ])
-])
+// properties([
+//         parameters([
+//                 string(
+//                         defaultValue: '',
+//                         name: 'PIPELINE_YAML',
+//                         trim: true
+//                 ),
+//         ])
+// ])
 
 common = {}
 commitID = ""
