@@ -271,8 +271,8 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
         archiveArtifacts artifacts: 'ciResult.json', fingerprint: true
         if (currentBuild.result == "FAILURE") {
             sh """
-                wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline-ci.py
-                python3 agent-tipipeline-ci.py ciResult.json
+                wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline.py
+                python3 agent-tipipeline.py ciResult.json
             """  
         }
         
