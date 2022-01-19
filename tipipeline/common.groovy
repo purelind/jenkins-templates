@@ -206,6 +206,7 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
                 notify_results_array << [
                     name: originTask.taskName, 
                     checkName: originTask.checkerName,
+                    type: "task",
                     result: result.getResult(), 
                     fullDisplayName: result.getFullDisplayName(), 
                     buildNumber: result.getNumber().toString(),
@@ -238,6 +239,14 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             updatePipelineRun(pipeline)
             currentBuild.result = "SUCCESS"
         }
+        def trigger = ""
+        if (pipeline.triggerEvent in ["verify", "merge"]) {
+            trigger = ghprbPullAuthorLogin
+            if ( ghprbTriggerAuthorLogin != "" ) {
+                trigger = ghprbTriggerAuthorLogin
+            }
+        }
+
         notify_results_array << [
             name: pipeline.pipelineName,
             result: currentBuild.result,
@@ -254,17 +263,18 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             triggerEvent: pipeline.triggerEvent,
             receiver_lark: pipeline.notify.lark,
             receiver_email: pipeline.notify.email,
+            trigger: trigger,
         ]
         def resultJson = groovy.json.JsonOutput.toJson(notify_results_array)
         writeJSON file: 'ciResult.json', json: resultJson, pretty: 4
         sh 'cat ciResult.json'
         archiveArtifacts artifacts: 'ciResult.json', fingerprint: true
-        // if (currentBuild.result == "FAILURE") {
-        //     sh """
-        //         wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline-ci.py
-        //         python3 agent-tipipeline-ci.py ciResult.json
-        //     """  
-        // }
+        if (currentBuild.result == "FAILURE") {
+            sh """
+                wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline-ci.py
+                python3 agent-tipipeline-ci.py ciResult.json
+            """  
+        }
         
     }
 
