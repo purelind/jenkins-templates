@@ -138,11 +138,11 @@ def triggerTask(taskName,params) {
 
 def cacheCode(org_and_repo,commitID,branch,prID) {
     stage("cache code") {
-        println("cache code: ${repo} ${commitID} ${branch} ${prID}")
+        println("cache code: ${org_and_repo} ${commitID} ${branch} ${prID}")
         def repo = org_and_repo.split("/")[1]
         def org = org_and_repo.split("/")[0]
         def cacheCodeUrl = "${FILE_SERVER_URL}/download/builds/pingcap/devops/cachecode/${repo}/${commitID}/${repo}.tar.gz"
-        cacheAlreadyExist = sh(returnStatus: true, script: """
+        def cacheAlreadyExist = sh(returnStatus: true, script: """
                 if curl --output /dev/null --silent --head --fail ${cacheCodeUrl}; then exit 0; else exit 1; fi
                 """)
         if (cacheAlreadyExist == 0) {
