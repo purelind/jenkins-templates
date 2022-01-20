@@ -1,12 +1,12 @@
-properties([
-        parameters([
-                string(
-                        defaultValue: '',
-                        name: 'PIPELINE_YAML',
-                        trim: true
-                ),
-        ])
-])
+// properties([
+//         parameters([
+//                 string(
+//                         defaultValue: '',
+//                         name: 'PIPELINE_YAML',
+//                         trim: true
+//                 ),
+//         ])
+// ])
 
 def get_sha(repo,branch) {
     sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
