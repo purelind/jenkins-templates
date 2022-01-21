@@ -26,12 +26,12 @@ node("lightweight_pod") {
         // """
         // common = load "common.groovy"
 
-        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML)
+        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML, "", "")
         commitID = get_sha(pipelineSpec.repo,pipelineSpec.defaultRef)
         println "commitID: ${commitID}"
         if (commitID == "" || commitID == null) {
             throw "commitID is empty"
         }
-        common.runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, commitID, "")
+        common.runPipeline(pipelineSpec, "daily", pipelineSpec.defaultRef, commitID, "", "")
     }
 }

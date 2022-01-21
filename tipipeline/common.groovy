@@ -77,7 +77,7 @@ class PipelineSpec {
 
 PIPELINE_RUN_API_ENDPOINT = "http://172.16.5.15:30792/pipelinerun"
 
-def loadPipelineConfig(fileURL) {
+def loadPipelineConfig(fileURL, pullRequestAuthor, triggerAuthor) {
     ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory())
     objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,false)
     yamlRequest = httpRequest url: fileURL, httpMode: 'GET'
@@ -87,11 +87,11 @@ def loadPipelineConfig(fileURL) {
         pipelineSpec.owner = repoInfo[0]
         pipelineSpec.repo = repoInfo[1]
     }
-    if (pipelineSpec.triggerEvent == "verify") {
-        pipelineSpec.notify.lark << ghprbPullAuthorLogin
-        if ( ghprbTriggerAuthorLogin != "" && ghprbTriggerAuthorLogin != ghprbPullAuthorLogin) {
-            pipelineSpec.notify.lark << ghprbTriggerAuthorLogin
-        }
+    if (pullRequestAuthor != "") {
+        pipelineSpec.notify.lark << pullRequestAuthor
+    }
+    if (triggerAuthor != "") {
+        pipelineSpec.notify.lark << triggerAuthor
     }
     return pipelineSpec
 }
@@ -165,7 +165,7 @@ def cacheCode(org_and_repo,commitID,branch,prID) {
 }
 
 
-def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, String commitID, String pullRequest) {
+def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, String commitID, String pullRequest, String triggerGithubID) {
     try {
         pipeline.commitID = commitID
         pipeline.branch = branch
@@ -244,11 +244,8 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
             currentBuild.result = "SUCCESS"
         }
         def trigger = ""
-        if (pipeline.triggerEvent in ["verify", "merge"]) {
-            trigger = ghprbPullAuthorLogin
-            if ( ghprbTriggerAuthorLogin != "" ) {
-                trigger = ghprbTriggerAuthorLogin
-            }
+        if (triggerGithubID != "") {
+            trigger = triggerGithubID
         }
         def receiver_lark = []
         def receiver_email = []

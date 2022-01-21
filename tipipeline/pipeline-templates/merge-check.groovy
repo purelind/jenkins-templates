@@ -13,6 +13,8 @@ if (REF.startsWith("refs/heads/")) {
     BRANCH = REF.replaceAll("refs/heads/","")
 }
 
+PULL_REQUEST_AUTHOR = ""
+
 common = {}
 commitID = ""
 taskStartTimeInMillis = System.currentTimeMillis()
@@ -26,7 +28,7 @@ node("lightweight_pod") {
         // """
         // common = load "common.groovy"
 
-        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML)
-        common.runPipeline(pipelineSpec, "merge", BRANCH, COMMIT_ID, "")
+        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML, PULL_REQUEST_AUTHOR, "")
+        common.runPipeline(pipelineSpec, "merge", BRANCH, COMMIT_ID, "", "")
     }
 }

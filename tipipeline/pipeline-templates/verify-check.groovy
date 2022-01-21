@@ -12,6 +12,13 @@ common = {}
 commitID = ""
 taskStartTimeInMillis = System.currentTimeMillis()
 
+pullRequestAuthor = ghprbPullAuthorLogin
+triggerGithubID = ""
+if (ghprbTriggerAuthorLogin != null && ghprbTriggerAuthorLogin != "") {
+    triggerGithubID = ghprbTriggerAuthorLogin
+}
+
+
 node("lightweight_pod") {
     container("golang") {
         checkout scm
@@ -21,7 +28,7 @@ node("lightweight_pod") {
         // """
         // common = load "common.groovy"
 
-        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML)
-        common.runPipeline(pipelineSpec, "verify", ghprbTargetBranch, ghprbActualCommit, ghprbPullId)
+        pipelineSpec = common.loadPipelineConfig(PIPELINE_YAML, pullRequestAuthor, triggerGithubID)
+        common.runPipeline(pipelineSpec, "verify", ghprbTargetBranch, ghprbActualCommit, ghprbPullId, triggerGithubID)
     }
 }
