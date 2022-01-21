@@ -87,10 +87,10 @@ def loadPipelineConfig(fileURL, pullRequestAuthor, triggerAuthor) {
         pipelineSpec.owner = repoInfo[0]
         pipelineSpec.repo = repoInfo[1]
     }
-    if (pullRequestAuthor != "") {
+    if (pullRequestAuthor != "" && pipelineSpec.notify != null pipelineSpec.notify.lark != null) {
         pipelineSpec.notify.lark << pullRequestAuthor
     }
-    if (triggerAuthor != "") {
+    if (triggerAuthor != "" && pipelineSpec.notify != null pipelineSpec.notify.lark != null) {
         pipelineSpec.notify.lark << triggerAuthor
     }
     return pipelineSpec

@@ -13,7 +13,7 @@ commitID = ""
 taskStartTimeInMillis = System.currentTimeMillis()
 
 pullRequestAuthor = ghprbPullAuthorLogin
-triggerGithubID = ""
+triggerGithubID = ghprbPullAuthorLogin
 if (ghprbTriggerAuthorLogin != null && ghprbTriggerAuthorLogin != "") {
     triggerGithubID = ghprbTriggerAuthorLogin
 }
