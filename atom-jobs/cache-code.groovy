@@ -172,7 +172,7 @@ try {
             }
 
             stage("Upload") {
-                sleep(time:6,unit:"SECONDS") // workaround for tar file changed before read it
+                sleep(time:10,unit:"SECONDS") // workaround for tar file changed before read it
                 dir("${ws}") {
                     def filepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz"
                     def sha256sumFilepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz.sha256sum"
