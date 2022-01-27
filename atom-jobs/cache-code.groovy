@@ -128,10 +128,11 @@ def checkoutCode() {
                 echo ".git not exist or not a valid git dir. Delete dir..."
                 deleteDir()
             }
-            doCheckout(repoUrlMap[REPO], COMMIT_ID, resSpec)
+            doCheckout(repo_ssh_url, COMMIT_ID, resSpec)
         }
     }
 }
+
 
 try {
     run_with_pod {
@@ -171,14 +172,17 @@ try {
             }
 
             stage("Upload") {
-                def filepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz"
-                def sha256sumFilepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz.sha256sum"
-                sh """
-                tar -C ${ws} -czf ${REPO}.tar.gz ${REPO}
-                sha256sum ${REPO}.tar.gz > ${REPO}.tar.gz.sha256sum            
-                ls -lh ${REPO}.tar.gz
-                curl -F ${filepath}=@${REPO}.tar.gz ${FILE_SERVER_URL}/upload
-                """
+                sleep(time:6,unit:"SECONDS") // workaround for tar file changed before read it
+                dir("${ws}") {
+                    def filepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz"
+                    def sha256sumFilepath = "builds/pingcap/devops/cachecode/${REPO}/${COMMIT_ID}/${REPO}.tar.gz.sha256sum"
+                    sh """
+                    tar -C ${ws} -czf ${REPO}.tar.gz ${REPO}
+                    sha256sum ${REPO}.tar.gz > ${REPO}.tar.gz.sha256sum            
+                    ls -lh ${REPO}.tar.gz
+                    curl -F ${filepath}=@${REPO}.tar.gz ${FILE_SERVER_URL}/upload
+                    """
+                }
             }
 
             stage("Print url") {
