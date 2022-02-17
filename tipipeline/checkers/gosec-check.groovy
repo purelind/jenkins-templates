@@ -48,9 +48,10 @@ def runBody = {config ->
     } catch (err) {
         throw err
     } finally {
+        def gosecReport = config.params["gosecReport"]
         sh """
             wget ${FILE_SERVER_URL}/download/rd-atom-agent/atom-gosec/agent-gosec.py
-            python3 agent-gosec.py ${config.repo}/results.xml
+            python3 agent-gosec.py ${config.repo}/${gosecReport}
         """
         ENV_GOSEC_SUMMARY = sh(script: "cat test_summary.info", returnStdout: true).trim()
         println ENV_GOSEC_SUMMARY
@@ -58,12 +59,12 @@ def runBody = {config ->
 
         sh """
             wget ${FILE_SERVER_URL}/download/rd-index-agent/repo_gosec/tiinsight-agent-gosec.py
-            python3 tiinsight-agent-gosec.py ${config.repo} ${config.branch} ${config.commitID} ${config.repo}/results.xml ${BUILD_URL}
+            python3 tiinsight-agent-gosec.py ${config.repo} ${config.branch} ${config.commitID} ${config.repo}/${gosecReport} ${BUILD_URL}
         """
 
         junit(
                 allowEmptyResults: true,
-                testResults: "${config.repo}/results.xml"
+                testResults: "${config.repo}/${gosecReport}"
         )
     }
 }
