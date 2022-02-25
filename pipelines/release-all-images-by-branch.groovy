@@ -43,8 +43,19 @@ if (GIT_BRANCH.startsWith("release-")) {
     RELEASE_TAG = "v"+ trimPrefix(GIT_BRANCH) + ".0-nightly"
 }
 
+def test_binary_already_build(binary_url) {
+    cacheExisted = sh(returnStatus: true, script: """
+    if curl --output /dev/null --silent --head --fail ${binary_url}; then exit 0; else exit 1; fi
+    """)
+    if (cacheExisted == 0) {
+        return true
+    } else {
+        return false
+    }
+}
 
-def release_one(repo,failpoint) {
+
+def release_one(repo,failpoint,needMultiArch) {
     def actualRepo = repo
     if (repo == "br" && GIT_BRANCH == "master") {
         actualRepo = "tidb"
@@ -61,10 +72,19 @@ def release_one(repo,failpoint) {
         actualRepo = "tiflow"
     }
     def sha1 =  get_sha(actualRepo)
+    println "repo: ${repo}, actualRepo: ${actualRepo}, sha1: ${sha1}"
     def binary = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
     if (failpoint) {
         binary = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
     }
+
+    def needBuild = true
+    binaryExisted = test_binary_already_build("${FILE_SERVER_URL}/download/${binary}")
+    if (binaryExisted) {
+        println "binary ${binary} already existed"
+        needBuild = false
+    }
+
     def paramsBuild = [
         string(name: "ARCH", value: "amd64"),
         string(name: "OS", value: "linux"),
@@ -80,16 +100,32 @@ def release_one(repo,failpoint) {
     if (failpoint) {
         paramsBuild.push([$class: 'BooleanParameterValue', name: 'FAILPOINT', value: true])
     }
-    build job: "build-common",
-            wait: true,
-            parameters: paramsBuild
+    if (needBuild) {
+        build job: "build-common",
+                wait: true,
+                parameters: paramsBuild
+    }
+
 
     def dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
     def image = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}"
     if (repo == "tics") {
-        image = image + ",hub.pingcap.net/qa/tiflash:${GIT_BRANCH}"
+        image = "hub.pingcap.net/qa/tics:${GIT_BRANCH}" + ",hub.pingcap.net/qa/tiflash:${GIT_BRANCH}"
         dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
     }
+
+    def dockerfileArm64 = ""
+    def imageArm64 = ""
+    def binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
+
+    if (needMultiArch) {
+        // image name for amd64 need change to such a format: hub.pingcap.net/qa/tidb-amd64:master
+        image = image.replace("${repo}", "${repo}-amd64")
+        dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
+        imageArm64 = "hub.pingcap.net/qa/${repo}-arm64:${GIT_BRANCH}"
+    }
+
+
     if (failpoint) {
         image = "${image}-failpoint"
     }
@@ -103,9 +139,64 @@ def release_one(repo,failpoint) {
         string(name: "DOCKERFILE", value: dockerfile),
         string(name: "RELEASE_DOCKER_IMAGES", value: image),
     ]
-    build job: "docker-common",
+
+    if (needMultiArch) {
+        def imageMultiArch = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}"
+        if (failpoint) {
+            imageMultiArch = "${imageMultiArch}-failpoint"
+        }
+        println "build multi arch docker image: ${imageMultiArch}"
+        parallel(
+            "multiarch-linux-amd64": {
+                build job: "docker-common",
+                    wait: true,
+                    parameters: paramsDocker
+            },
+            "multiarch-linux-arm64": {
+                def paramsDockerArm64 = [
+                    string(name: "ARCH", value: "arm64"),
+                    string(name: "OS", value: "linux"),
+                    string(name: "INPUT_BINARYS", value: binaryArm64),
+                    string(name: "REPO", value: repo),
+                    string(name: "PRODUCT", value: repo),
+                    string(name: "RELEASE_TAG", value: RELEASE_TAG),
+                    string(name: "DOCKERFILE", value: dockerfileArm64),
+                    string(name: "RELEASE_DOCKER_IMAGES", value: imageArm64),
+                ]
+            }
+        )
+
+        node("delivery") {
+            container("delivery") {
+                sh """
+                cat <<EOF > manifest-${repo}-${GIT_BRANCH}.yaml
+image: ${imageMultiArch}
+manifests:
+-
+    image: ${imageArm64}
+    platform:
+    architecture: arm64
+    os: linux
+-
+    image: ${image}
+    platform:
+    architecture: amd64
+    os: linux
+
+EOF
+                curl -O manifest-tool ${FILE_SERVER}/download/cicd/tools/manifest-tool-linux-amd64
+                chmod +x manifest-tool
+                ./manifest-tool push manifest-${repo}-${GIT_BRANCH}.yaml
+                """
+                archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
+            }
+        } 
+    } else {
+        build job: "docker-common",
             wait: true,
             parameters: paramsDocker
+    }
+
 
 
     def dockerfileForDebug = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${repo}"
@@ -174,17 +265,28 @@ def release_one(repo,failpoint) {
         
 }
 
+
+
 stage ("release") {
     node("${GO_BUILD_SLAVE}") {
         container("golang") {
-            releaseRepos = ["dumpling","br","ticdc","tidb-binlog","tics","tidb","tikv","pd"]
+            releaseRepos = ["dumpling","br","ticdc","tidb-binlog","tics"]
             builds = [:]
             for (item in releaseRepos) {
                 def product = "${item}"
                 builds["build ${item}"] = {
-                    release_one(product,false)
+                    release_one(product,false,false)
                 }
             }
+
+            releaseReposMultiArch = ["tidb","tikv","pd"]
+            for (item in releaseReposMultiArch) {
+                def product = "${item}"
+                builds["build ${item} multiarch"] = {
+                    release_one(product,false,false)
+                }
+            }
+
             failpointRepos = ["tidb","pd","tikv","br"]
             for (item in failpointRepos) {
                 def product = "${item}"
