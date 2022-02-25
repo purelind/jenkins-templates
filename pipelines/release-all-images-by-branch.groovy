@@ -6,12 +6,12 @@
 properties([
         parameters([
                 string(
-                        defaultValue: '',
+                        defaultValue: 'master',
                         name: 'GIT_BRANCH',
                         trim: true
                 ),
                 booleanParam(
-                        defaultValue: true,
+                        defaultValue: false,
                         name: 'FORCE_REBUILD'
                 )
         ]),
@@ -27,6 +27,8 @@ properties([
             ''')
         ])
 ])
+
+
 
 
 string trimPrefix = {
@@ -163,13 +165,18 @@ def release_one(repo,failpoint,needMultiArch) {
                     string(name: "DOCKERFILE", value: dockerfileArm64),
                     string(name: "RELEASE_DOCKER_IMAGES", value: imageArm64),
                 ]
+                build job: "docker-common",
+                    wait: true,
+                    parameters: paramsDockerArm64
             }
         )
 
         node("delivery") {
             container("delivery") {
-                sh """
-                cat <<EOF > manifest-${repo}-${GIT_BRANCH}.yaml
+                withCredentials([usernamePassword(credentialsId: 'harbor-pingcap', usernameVariable: 'harborUser', passwordVariable: 'harborPassword')]) {
+                    sh """
+                    docker login -u ${ harborUser} -p ${harborPassword} hub.pingcap.net
+                    cat <<EOF > manifest-${repo}-${GIT_BRANCH}.yaml
 image: ${imageMultiArch}
 manifests:
 -
@@ -184,20 +191,21 @@ manifests:
     os: linux
 
 EOF
-                curl -O manifest-tool ${FILE_SERVER}/download/cicd/tools/manifest-tool-linux-amd64
-                chmod +x manifest-tool
-                ./manifest-tool push manifest-${repo}-${GIT_BRANCH}.yaml
-                """
-                archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
+                    cat manifest-${repo}-${GIT_BRANCH}.yaml
+                    curl -o manifest-tool ${FILE_SERVER_URL}/download/cicd/tools/manifest-tool-linux-amd64
+                    chmod +x manifest-tool
+                    ./manifest-tool push from-spec manifest-${repo}-${GIT_BRANCH}.yaml
+                    """
             }
-        } 
+            archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
+        }
+    }
+        
     } else {
         build job: "docker-common",
             wait: true,
             parameters: paramsDocker
     }
-
-
 
     def dockerfileForDebug = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${repo}"
     def imageForDebug = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}-debug"
@@ -266,7 +274,6 @@ EOF
 }
 
 
-
 stage ("release") {
     node("${GO_BUILD_SLAVE}") {
         container("golang") {
@@ -283,7 +290,7 @@ stage ("release") {
             for (item in releaseReposMultiArch) {
                 def product = "${item}"
                 builds["build ${item} multiarch"] = {
-                    release_one(product,false,false)
+                    release_one(product,false,true)
                 }
             }
 
