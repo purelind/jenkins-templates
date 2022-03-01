@@ -220,7 +220,24 @@ def checkoutCode() {
         rm -f src-${REPO}.tar.gz
         """
         sh "chown -R 1000:1000 ./"
-    }    
+    } else {
+        def codeCacheInFileserverUrl = "${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-${REPO}.tar.gz"
+        def cacheExisted = sh(returnStatus: true, script: """
+            if curl --output /dev/null --silent --head --fail ${codeCacheInFileserverUrl}; then exit 0; else exit 1; fi
+            """)
+        if (cacheExisted == 0) {
+            println "get code from fileserver to reduce clone time"
+            println "codeCacheInFileserverUrl=${codeCacheInFileserverUrl}"
+            sh """
+            curl -O ${codeCacheInFileserverUrl}
+            tar -xzf src-${REPO}.tar.gz --strip-components=1
+            rm -f src-${REPO}.tar.gz
+            """
+        } else {
+            println "get code from github"
+        }
+    }
+
     checkout changelog: false, poll: true,
                     scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
