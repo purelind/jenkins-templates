@@ -243,7 +243,7 @@ def checkoutCode() {
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
                                     [$class: 'CloneOption', timeout: 60],
                                     [$class: 'PruneStaleBranch'],
-                                    [$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
+                                    [$class: 'SubmoduleOption', timeout: 30, disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
                                     [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
                         userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
                                             refspec      : specRef,
