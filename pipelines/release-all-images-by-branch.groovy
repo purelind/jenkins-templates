@@ -15,21 +15,42 @@ properties([
                         name: 'FORCE_REBUILD'
                 )
         ]),
-        pipelineTriggers([
-            parameterizedCron('''
-                # H H(0-23)/4 * * * % GIT_BRANCH=release-4.0
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.0
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.1
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.2
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.3
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.4
-                H H(0-23)/12 * * * % GIT_BRANCH=master
-            ''')
-        ])
+        // pipelineTriggers([
+        //     parameterizedCron('''
+        //         # H H(0-23)/4 * * * % GIT_BRANCH=release-4.0
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.0
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.1
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.2
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.3
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.4
+        //         H H(0-23)/12 * * * % GIT_BRANCH=master
+        //     ''')
+        // ])
 ])
 
 
+// ***
+// thress type image: noremal, failpoint, debug, multiArch
+//   type normal: use binary from build-common: like tidb-server or tikv-server
+//   type failpoint: use binary from build-common but enable failpoint: like tidb-server-failpoint or tikv-server-failpoint
+//   type debug: use binary from build-common and use diffrent image Dockerfile (use ceontos7 as base image other than alpine)
 
+// type normal & failpoint & debug commonly build a single arch image: just linux-amd64 or just linux-arm64
+// type multiArch build a multi arch image: build two arch image: linux-amd64 and linux-arm64 then merge them by manifest-tool
+//   example: ${HARBOR_PROJECT_PREFIX}/tidb:master is valid for both linux-amd64 and linux-arm64
+//            it contains two images: ${HARBOR_PROJECT_PREFIX}/tidb:master-linux-amd64 and ${HARBOR_PROJECT_PREFIX}/tidb:master-linux-arm64
+// ***
+
+
+HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
+// TODO: remove debug code
+HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+
+// for master branch: use default local tag: v5.5.0-nightly
+RELEASE_TAG = "v5.5.0-nightly"
+if (GIT_BRANCH.startsWith("release-")) {
+    RELEASE_TAG = "v"+ trimPrefix(GIT_BRANCH) + ".0-nightly"
+}
 
 string trimPrefix = {
     it.startsWith('release-') ? it.minus('release-').split("-")[0] : it 
@@ -38,11 +59,6 @@ string trimPrefix = {
 def get_sha(repo) {
     sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
     return sh(returnStdout: true, script: "python gethash.py -repo=${repo} -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-}
-
-RELEASE_TAG = "v5.5.0-nightly"
-if (GIT_BRANCH.startsWith("release-")) {
-    RELEASE_TAG = "v"+ trimPrefix(GIT_BRANCH) + ".0-nightly"
 }
 
 def test_binary_already_build(binary_url) {
@@ -56,136 +72,217 @@ def test_binary_already_build(binary_url) {
     }
 }
 
+def startBuildBinary(arch, binary, actualRepo, repo, sha1) {
+    def paramsBuild = [
+    string(name: "ARCH", value: arch),
+    string(name: "OS", value: "linux"),
+    string(name: "EDITION", value: "community"),
+    string(name: "OUTPUT_BINARY", value: binary),
+    string(name: "REPO", value: actualRepo),
+    string(name: "PRODUCT", value: repo),
+    string(name: "GIT_HASH", value: sha1),
+    string(name: "RELEASE_TAG", value: RELEASE_TAG),
+    string(name: "TARGET_BRANCH", value: GIT_BRANCH),
+    [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+    ]
+    println "paramsBuild: ${paramsBuild}"
 
-def release_one(repo,failpoint,needMultiArch) {
+    build job: "build-common",
+        wait: true,
+        parameters: paramsBuild
+}
+
+def run_with_docker_pod() {
+
+}
+
+def parseBuildInfo(repo) {
     def actualRepo = repo
     if (repo == "br" && GIT_BRANCH == "master") {
         actualRepo = "tidb"
     }
+    // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb as actual repo
     if (repo == "br" && GIT_BRANCH.startsWith("release-") && GIT_BRANCH >= "release-5.2") {
         actualRepo = "tidb"
     }
-
+    // Notice: the code of dumpling has been merged to tidb from release-5.3, so we need to use tidb as actual repo
     if (repo == "dumpling" && GIT_BRANCH.startsWith("release-") && GIT_BRANCH >= "release-5.3") {
         actualRepo = "tidb"
     }
-
+    // Notice: repo ticdc has been renamed to tiflow from 2022/0/01, so we need to use tiflow as actual repo
     if (repo == "ticdc") {
         actualRepo = "tiflow"
     }
-    def sha1 =  get_sha(actualRepo)
-    println "repo: ${repo}, actualRepo: ${actualRepo}, sha1: ${sha1}"
-    def binary = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
-    if (failpoint) {
-        binary = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
+    if (repo == "tiflash") {
+        actualRepo = "tics"
     }
-
-    def needBuild = true
-    binaryExisted = test_binary_already_build("${FILE_SERVER_URL}/download/${binary}")
-    if (binaryExisted) {
-        println "binary ${binary} already existed"
-        needBuild = false
-    }
-
-    def paramsBuild = [
-        string(name: "ARCH", value: "amd64"),
-        string(name: "OS", value: "linux"),
-        string(name: "EDITION", value: "community"),
-        string(name: "OUTPUT_BINARY", value: binary),
-        string(name: "REPO", value: actualRepo),
-        string(name: "PRODUCT", value: repo),
-        string(name: "GIT_HASH", value: sha1),
-        string(name: "RELEASE_TAG", value: RELEASE_TAG),
-        string(name: "TARGET_BRANCH", value: GIT_BRANCH),
-        [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
-    ]
-    if (failpoint) {
-        paramsBuild.push([$class: 'BooleanParameterValue', name: 'FAILPOINT', value: true])
-    }
-    if (needBuild) {
-        build job: "build-common",
-                wait: true,
-                parameters: paramsBuild
-    }
-
-
-    def dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
-    def image = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}"
-    if (repo == "tics") {
-        image = "hub.pingcap.net/qa/tics:${GIT_BRANCH}" + ",hub.pingcap.net/qa/tiflash:${GIT_BRANCH}"
-        dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
-    }
-
-    def dockerfileArm64 = ""
-    def imageArm64 = ""
-    def binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
-
-    if (needMultiArch) {
-        // image name for amd64 need change to such a format: hub.pingcap.net/qa/tidb-amd64:master
-        image = image.replace("${repo}", "${repo}-amd64")
-        dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
-        imageArm64 = "hub.pingcap.net/qa/${repo}-arm64:${GIT_BRANCH}"
-    }
-
-
-    if (failpoint) {
-        image = "${image}-failpoint"
-    }
-    def paramsDocker = [
-        string(name: "ARCH", value: "amd64"),
-        string(name: "OS", value: "linux"),
-        string(name: "INPUT_BINARYS", value: binary),
-        string(name: "REPO", value: repo),
-        string(name: "PRODUCT", value: repo),
-        string(name: "RELEASE_TAG", value: RELEASE_TAG),
-        string(name: "DOCKERFILE", value: dockerfile),
-        string(name: "RELEASE_DOCKER_IMAGES", value: image),
-    ]
-
-    if (needMultiArch) {
-        def imageMultiArch = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}"
-        if (failpoint) {
-            imageMultiArch = "${imageMultiArch}-failpoint"
+    // TODO: tidb-lightning is so complex !!!
+    // tidb-lightning is a part of br, and br is merged to tidb from release-5.2, so we need to use tidb as actual repo
+    if (repo == "tidb-lightning") { // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb as actual repo
+        if (GIT_BRANCH.startsWith("release-") && GIT_BRANCH >= "release-5.2") {
+            actualRepo = "tidb"
+        } else if (GIT_BRANCH == "master") {
+            actualRepo = "tidb"
+        } else {
+            actualRepo = "br"
         }
-        println "build multi arch docker image: ${imageMultiArch}"
-        parallel(
-            "multiarch-linux-amd64": {
-                build job: "docker-common",
-                    wait: true,
-                    parameters: paramsDocker
-            },
-            "multiarch-linux-arm64": {
-                def paramsDockerArm64 = [
-                    string(name: "ARCH", value: "arm64"),
-                    string(name: "OS", value: "linux"),
-                    string(name: "INPUT_BINARYS", value: binaryArm64),
-                    string(name: "REPO", value: repo),
-                    string(name: "PRODUCT", value: repo),
-                    string(name: "RELEASE_TAG", value: RELEASE_TAG),
-                    string(name: "DOCKERFILE", value: dockerfileArm64),
-                    string(name: "RELEASE_DOCKER_IMAGES", value: imageArm64),
-                ]
-                build job: "docker-common",
-                    wait: true,
-                    parameters: paramsDockerArm64
-            }
-        )
+    }
+    def sha1 =  get_sha(actualRepo)
+    if (sha1 == "") {
+        println "ERROR: can not get sha1 for ${repo} ${GIT_BRANCH}"
+        throw new Exception("can not get sha1 for ${repo} ${GIT_BRANCH}")
+    }
+    println "repo: ${repo}, actualRepo: ${actualRepo}, sha1: ${sha1}"
 
-        node("delivery") {
-            container("delivery") {
+    // tics need use tiflash dockerfile
+    // tics has not  failpoint or debug image.
+    //  repo support enable failpoint: tidb / tikv / pd / br
+    //  repo support support debug image(amd64): br / dumpling / pd / ticdc / tidb / tidb-binlog / tidb-lightning / tikv 
+    // if (repo == "tics") {
+    //     imageName = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}"
+    //     imageNameAmd64 = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-amd64,${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-amd64"
+    //     imageNameArm64 = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-arm64,${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-arm64"
+    // }
+
+
+    // def imageName = ""
+    // def imageNameEnableFailpoint = ""
+    // def imageNameForDebug = ""
+    // def imageNameForDebugEnableFailpoint = ""
+    // def imageNameAmd64 = ""
+    // def imageNameArm64 = ""\
+
+    // builds/pingcap/test/tidb/3e1cd2733a8e43670b25e7b2e53001eccac78147/centos7/tidb-linux-arm64.tar.gz
+
+    def binaryAmd64 = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
+    def binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
+    def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
+    def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
+    def binaryAmd64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
+    def binaryArm64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-arm64/${repo}.tar.gz"
+
+    if (repo == "tics") {
+        dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
+        dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/tiflash"
+    }
+    if (repo == "tiflash") {
+        binaryAmd64 = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/tics.tar.gz"
+        binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/tics-linux-arm64.tar.gz"
+    }
+    if (repo == "tidb-lightning") {
+        // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb binary
+        // tar package of tidb build by atom-job include these binaries:
+        // 
+        // example: download/builds/pingcap/br/master/3e1cd2733a8e43670b25e7b2e53001eccac78147/centos7/br.tar.gz
+        binaryAmd64 = "builds/pingcap/br/test/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64.tar.gz"
+        binaryArm64 = "builds/pingcap/br/test/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64.tar.gz"
+        binaryAmd64Failpoint = "builds/pingcap/br/test/failpoint/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64.tar.gz"
+        binaryArm64Failpoint = "builds/pingcap/br/test/failpoint/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64.tar.gz"
+    }
+
+    return  [
+        "repo": repo,
+        "sha1": sha1,
+        "actualRepo": "${actualRepo}",
+        "binaryAmd64": binaryAmd64,
+        "binaryArm64": binaryArm64,
+        "binaryAmd64Failpoint": binaryAmd64Failpoint,
+        "binaryArm64Failpoint": binaryArm64Failpoint,
+        "dockerfileAmd64": dockerfileAmd64,
+        "dockerfileArm64": dockerfileArm64,
+        "dockerfileForDebugAmd64": "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${repo}",
+        // "dockerfileForDebugArm64": "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}",  // TODO: arm64 have not unique debug image Dockerfile
+        "imageName": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}",
+        "imageNameEnableFailpoint": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-failpoint",
+        "imageNameForDebug": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-debug",
+        "imageNameForDebugEnableFailpoint": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-debug-failpoint",
+        "imageNameAmd64": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-linux-amd64",
+        "imageNameArm64": "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-linux-arm64",
+    ]
+}
+
+
+def release_one_normal(repo, needMultiArch) {
+    def buildInfo = parseBuildInfo(repo)
+
+    def buildRepo = buildInfo.actualRepo
+    def buildProduct = repo
+    if (repo == "tidb-lightning") {
+        buildProduct = "br"
+    }
+    stage("build binary") {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}")) {
+            echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
+        } else {
+            echo "build binary(amd64): ${buildInfo.binaryAmd64}"
+            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
+        }
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}")) {
+            echo "binary already build(arm64): ${buildInfo.binaryArm64}"
+        } else {
+            echo "build binary(arm64): ${buildInfo.binaryArm64}"
+            startBuildBinary("arm64", buildInfo.binaryArm64, buildRepo, buildProduct, buildInfo.sha1)
+        }
+    }
+
+    if (needMultiArch) {
+        println "build multi arch image"
+        def multiArchImage = buildInfo.imageName
+
+        def dockerRepo = buildInfo.actualRepo
+        def dockerProduct = repo
+        if (repo == "tidb-lightning") {
+            dockerProduct = "br"
+        }
+        stage("build amd64 image") {
+            def paramsDockerAmd64 = [       
+            string(name: "ARCH", value: "amd64"),
+            string(name: "OS", value: "linux"),
+            string(name: "INPUT_BINARYS", value: buildInfo.binaryAmd64),
+            string(name: "REPO", value: dockerRepo),
+            string(name: "PRODUCT", value: dockerProduct),
+            string(name: "RELEASE_TAG", value: RELEASE_TAG),
+            string(name: "DOCKERFILE", value: buildInfo.dockerfileAmd64),
+            string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameAmd64),
+            ]
+            build job: "docker-common",
+                wait: true,
+                parameters: paramsDockerAmd64
+        }
+
+        stage("build arm64 image") {
+            def paramsDockerArm64 = [
+                string(name: "ARCH", value: "arm64"),
+                string(name: "OS", value: "linux"),
+                string(name: "INPUT_BINARYS", value: buildInfo.binaryArm64),
+                string(name: "REPO", value: dockerRepo),
+                string(name: "PRODUCT", value: dockerProduct),
+                string(name: "RELEASE_TAG", value: RELEASE_TAG),
+                string(name: "DOCKERFILE", value: buildInfo.dockerfileArm64),
+                string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameArm64),
+            ]
+            build job: "docker-common",
+                wait: true,
+                parameters: paramsDockerArm64
+        }
+
+        stage("manifest multiarch image") {
+            // start manifest-tool to make multi arch image
+            node("delivery") {
+                container("delivery") {
                 withCredentials([usernamePassword(credentialsId: 'harbor-pingcap', usernameVariable: 'harborUser', passwordVariable: 'harborPassword')]) {
                     sh """
                     docker login -u ${ harborUser} -p ${harborPassword} hub.pingcap.net
                     cat <<EOF > manifest-${repo}-${GIT_BRANCH}.yaml
-image: ${imageMultiArch}
+image: ${multiArchImage}
 manifests:
 -
-    image: ${imageArm64}
+    image: ${buildInfo.imageNameArm64}
     platform:
     architecture: arm64
     os: linux
 -
-    image: ${image}
+    image: ${buildInfo.imageNameAmd64}
     platform:
     architecture: amd64
     os: linux
@@ -196,113 +293,145 @@ EOF
                     chmod +x manifest-tool
                     ./manifest-tool push from-spec manifest-${repo}-${GIT_BRANCH}.yaml
                     """
+                }
+                archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
+                }
             }
-            archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
-        }
-    }
-        
+            println "multi arch image: ${multiArchImage}"
+        } 
     } else {
+        println "build single arch image (linux amd64)"
+        def paramsDocker = [       
+        string(name: "ARCH", value: "amd64"),
+        string(name: "OS", value: "linux"),
+        string(name: "INPUT_BINARYS", value: buildInfo.binaryAmd64),
+        string(name: "REPO", value: buildInfo.actualRepo),
+        string(name: "PRODUCT", value: repo),
+        string(name: "RELEASE_TAG", value: RELEASE_TAG),
+        string(name: "DOCKERFILE", value: buildInfo.dockerfileAmd64),
+        string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameAmd64),
+        ]
+        build job: "docker-common",
+            wait: true,
+            parameters: paramsDockerAmd64
+    }
+}
+
+
+// only tikv / pd / br / tidb support enable failpoint
+def release_one_enable_failpoint(repo) {
+    stage("build failpoint image") {
+        def buildInfo = parseBuildInfo(repo)
+        def buildRepo = buildInfo.actualRepo
+        def buildProduct = repo
+        if (repo == "tidb-lightning") {
+            buildProduct = "br"
+        }
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64Failpoint}")) {
+            echo "binary(amd64) already build: ${buildInfo.binaryAmd64Failpoint}"
+        } else {
+            echo "build binary(amd64): ${buildInfo.binaryAmd64Failpoint}"
+            startBuildBinary("amd64", buildInfo.binaryAmd64Failpoint, buildRepo, buildProduct, buildInfo.sha1)
+        }
+
+        def dockerRepo = buildInfo.actualRepo
+        def dockerProduct = repo
+        if (repo == "tidb-lightning") {
+            dockerProduct = "br"
+        }
+
+        println "build single arch image (linux amd64) with failpoint"
+        println "image with binary enable failpoint: ${buildInfo.imageNameAmd64Failpoint}"
+        
+        def paramsDockerFailpoint = [       
+        string(name: "ARCH", value: "amd64"),
+        string(name: "OS", value: "linux"),
+        string(name: "INPUT_BINARYS", value: buildInfo.binaryAmd64Failpoint),
+        string(name: "REPO", value: dockerRepo),
+        string(name: "PRODUCT", value: dockerProduct),
+        string(name: "RELEASE_TAG", value: RELEASE_TAG),
+        string(name: "DOCKERFILE", value: buildInfo.dockerfileAmd64),
+        string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameEnableFailpoint),
+        ]
+        println "paramsDockerFailpoint: ${paramsDockerFailpoint}"
+        build job: "docker-common",
+            wait: true,
+            parameters: paramsDockerFailpoint
+    }
+}
+
+def release_one_debug(repo) {
+    stage("build amd64 debug image") {
+        def buildInfo = parseBuildInfo(repo)
+        def buildRepo = buildInfo.actualRepo
+        def buildProduct = repo
+        if (repo == "tidb-lightning") {
+            buildProduct = "br"
+        }
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}")) {
+            echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
+        } else {
+            echo "build binary(amd64): ${buildInfo.binaryAmd64}"
+            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
+        }
+        def dockerRepo = buildInfo.actualRepo
+        def dockerProduct = repo
+        if (repo == "tidb-lightning") {
+            dockerProduct = "br"
+        }
+
+        println "build single arch image (linux amd64) with debug dockerfile"
+        println "debug image: ${buildInfo.imageNameAmd64Debug}"
+        def paramsDocker = [       
+        string(name: "ARCH", value: "amd64"),
+        string(name: "OS", value: "linux"),
+        string(name: "INPUT_BINARYS", value: buildInfo.binaryAmd64),
+        string(name: "REPO", value: dockerRepo),
+        string(name: "PRODUCT", value: dockerProduct),
+        string(name: "RELEASE_TAG", value: RELEASE_TAG),
+        string(name: "DOCKERFILE", value: buildInfo.dockerfileForDebugAmd64),
+        string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameForDebug),
+        ]
+        println "paramsDocker: ${paramsDocker}"
         build job: "docker-common",
             wait: true,
             parameters: paramsDocker
     }
-
-    def dockerfileForDebug = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${repo}"
-    def imageForDebug = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}-debug"
-    if (failpoint) {
-        imageForDebug = "hub.pingcap.net/qa/${repo}:${GIT_BRANCH}-failpoint-debug"
-    }
-    def paramsDockerForDebug = [
-        string(name: "ARCH", value: "amd64"),
-        string(name: "OS", value: "linux"),
-        string(name: "INPUT_BINARYS", value: binary),
-        string(name: "REPO", value: repo),
-        string(name: "PRODUCT", value: repo),
-        string(name: "RELEASE_TAG", value: RELEASE_TAG),
-        string(name: "DOCKERFILE", value: dockerfileForDebug),
-        string(name: "RELEASE_DOCKER_IMAGES", value: imageForDebug),
-    ]
-    if (repo != "tics") {
-        build job: "docker-common",
-            wait: true,
-            parameters: paramsDockerForDebug
-    }
+    
+}
 
 
-    if (repo == "br") {
-        def dockerfileLightning = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tidb-lightning"
-        def imageLightling = "hub.pingcap.net/qa/tidb-lightning:${GIT_BRANCH}"
-        if (failpoint) {
-            imageLightling = "${imageLightling}-failpoint"
+node("${GO_BUILD_SLAVE}") {
+    container("golang") {
+        builds = [:]
+        // releaseRepos = ["tidb-binlog","tics"]
+        // for (item in releaseRepos) {
+        //     def String product = "${item}"
+        //     builds["${item}-build"] = {
+        //         release_one_normal(product, false)
+        //         release_one_debug(product)
+        //     }
+        // }
+
+        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
+        for (item in releaseReposMultiArch) {
+            def String product = "${item}"
+            builds["${item}-multiarch"] = {
+                release_one_normal(product, true)
+                release_one_debug(product)
+            }
         }
-        def paramsDockerLightning = [
-            string(name: "ARCH", value: "amd64"),
-            string(name: "OS", value: "linux"),
-            string(name: "INPUT_BINARYS", value: binary),
-            string(name: "REPO", value: "lightning"),
-            string(name: "PRODUCT", value: "lightning"),
-            string(name: "RELEASE_TAG", value: RELEASE_TAG),
-            string(name: "DOCKERFILE", value: dockerfileLightning),
-            string(name: "RELEASE_DOCKER_IMAGES", value: imageLightling),
-        ]
-        build job: "docker-common",
-                wait: true,
-                parameters: paramsDockerLightning
-                
-        def dockerfileLightningForDebug = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/tidb-lightning"
-        def imageLightningForDebug = "hub.pingcap.net/qa/tidb-lightning:${GIT_BRANCH}-debug"
-        if (failpoint) {
-            imageLightningForDebug = "hub.pingcap.net/qa/tidb-lightning:${GIT_BRANCH}-failpoint-debug"
+        failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
+        for (item in failpointRepos) {
+            def String product = "${item}"
+            builds["${item}-failpoint"] = {
+                release_one_enable_failpoint(product)
+            }
         }
-        def paramsDockerLightningForDebug = [
-            string(name: "ARCH", value: "amd64"),
-            string(name: "OS", value: "linux"),
-            string(name: "INPUT_BINARYS", value: binary),
-            string(name: "REPO", value: "lightning"),
-            string(name: "PRODUCT", value: "lightning"),
-            string(name: "RELEASE_TAG", value: RELEASE_TAG),
-            string(name: "DOCKERFILE", value: dockerfileLightningForDebug),
-            string(name: "RELEASE_DOCKER_IMAGES", value: imageLightningForDebug),
-        ]
-        build job: "docker-common",
-                wait: true,
-                parameters: paramsDockerLightningForDebug
-
-    }
-
+        parallel builds
         
-}
-
-
-stage ("release") {
-    node("${GO_BUILD_SLAVE}") {
-        container("golang") {
-            releaseRepos = ["dumpling","br","ticdc","tidb-binlog","tics"]
-            builds = [:]
-            for (item in releaseRepos) {
-                def product = "${item}"
-                builds["build ${item}"] = {
-                    release_one(product,false,false)
-                }
-            }
-
-            releaseReposMultiArch = ["tidb","tikv","pd"]
-            for (item in releaseReposMultiArch) {
-                def product = "${item}"
-                builds["build ${item} multiarch"] = {
-                    release_one(product,false,true)
-                }
-            }
-
-            failpointRepos = ["tidb","pd","tikv","br"]
-            for (item in failpointRepos) {
-                def product = "${item}"
-                builds["build ${item} failpoint"] = {
-                    release_one(product,true)
-                }
-            }
-            parallel builds
+        stage("build other images") {
+            release_one_normal("tiflash", true)
         }
     }
 }
-
