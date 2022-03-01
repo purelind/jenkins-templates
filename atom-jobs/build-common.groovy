@@ -221,7 +221,6 @@ def checkoutCode() {
         """
         sh "chown -R 1000:1000 ./"
     }
-    
     checkout changelog: false, poll: true,
                     scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
