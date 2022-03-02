@@ -585,12 +585,14 @@ mkdir -p ${TARGET}/bin
 cp target/release/tikv-importer ${TARGET}/bin
 """
 
+// NOTE: remove param --auto-push for pull-monitoring 
+//      we don't want to auto create pull request in repo https://github.com/pingcap/monitoring/pulls
 buildsh["monitoring"] = """
 if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go build -o pull-monitoring  cmd/monitoring.go
-./pull-monitoring  --config=monitoring.yaml --auto-push --tag=${RELEASE_TAG} --token=\$TOKEN
+./pull-monitoring  --config=monitoring.yaml --tag=${RELEASE_TAG} --token=\$TOKEN
 rm -rf ${TARGET}
 mkdir -p ${TARGET}
 mv monitor-snapshot/${RELEASE_TAG}/operator/* ${TARGET}
@@ -627,7 +629,7 @@ fi;
 buildsh["enterprise-plugin"] = """
 cd ../
 rm -rf tidb
-git clone https://github.com/pingcap/tidb.git
+git clone --depth 1 https://github.com/pingcap/tidb.git
 cd tidb
 git reset --hard ${TIDB_HASH}
 cd cmd/pluginpkg
