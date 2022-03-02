@@ -47,8 +47,22 @@ repoUrlMap = [
     "tiflow": "git@github.com:pingcap/tiflow.git"
 ]
 
+tiupPatchBinaryMap = [
+    "tidb": "tidb-server",
+    "tikv": "tikv-server",
+    "ticdc": "ticdc-server",
+    "dm": "dm-master,dm-worker,dmctl",
+]
+
+
+
 GIT_HASH = ""
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+
+HOTFIX_BUILD_RESULT_FILE = "hotfix_build_result-${REPO}-${HOTFIX_TAG}.json"
+HOTFIX_BUILD_RESULT = [:]
+HOTFIX_BUILD_RESULT["repo"] = REPO
+HOTFIX_BUILD_RESULT["tag"] = HOTFIX_TAG
 
 // tag example : v5.3.1-20210221
 def selectImageGoVersion(repo, tag) {
@@ -94,6 +108,38 @@ def run_with_pod(Closure body) {
                             name: 'golang', alwaysPullImage: true,
                             image: "${pod_go_docker_image}", ttyEnabled: true,
                             resourceRequestCpu: '2000m', resourceRequestMemory: '4Gi',
+                            command: '/bin/sh -c', args: 'cat',
+                            envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
+                            
+                    )
+            ],
+            volumes: [
+                            nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+                                    serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false)
+                    ],
+    ) {
+        node(label) {
+            println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
+            body()
+        }
+    }
+}
+
+def run_with_lightweight_pod(Closure body) {
+    def label = "hotfix-build-by-tag-light-${BUILD_NUMBER}"
+    def cloud = "kubernetes"
+    def namespace = "jenkins-cd"
+    def pod_go_docker_image = 'hub.pingcap.net/jenkins/centos7_golang-1.16:latest'
+    def jnlp_docker_image = "jenkins/inbound-agent:4.3-4"
+    podTemplate(label: label,
+            cloud: cloud,
+            namespace: namespace,
+            idleMinutes: 0,
+            containers: [
+                    containerTemplate(
+                            name: 'golang', alwaysPullImage: true,
+                            image: "${pod_go_docker_image}", ttyEnabled: true,
+                            resourceRequestCpu: '200m', resourceRequestMemory: '1Gi',
                             command: '/bin/sh -c', args: 'cat',
                             envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
                             
@@ -165,6 +211,30 @@ def checkOutCode(repo, tag) {
     }
 }
 
+def buildTiupPatch(originalFile, packageName, patchFile, arch) {
+    if (packageName in ["tikv", "tidb", "pd", "ticdc"]) {
+        println "build tiup patch for ${packageName}"
+        run_with_lightweight_pod {
+            container("golang") {
+                deleteDir()
+                def patchBinary = tiupPatchBinaryMap[packageName]
+                println "build ${packageName} tiup patch: ${patchBinary} ${patchFile}"
+
+                sh """
+                curl ${originalFile} | tar -xz bin/
+                ls -alh bin/
+                cp bin/${patchBinary} .
+                tar -cvzf ${patchBinary}-linux-${arch}.tar.gz ${patchBinary}
+                curl -F ${patchFile}=@${patchBinary}-linux-${arch}.tar.gz ${FILE_SERVER_URL}/upload
+                """
+            }
+        }
+    } else {
+        println "skip build tiup patch for ${packageName}"
+    }
+
+}
+
 def buildOne(repo, product, hash, arch, binary, tag) {
     println "build binary ${repo} ${product} ${hash} ${arch}"
     println "binary: ${binary}"
@@ -176,8 +246,6 @@ def buildOne(repo, product, hash, arch, binary, tag) {
         string(name: "REPO", value: repo),
         string(name: "PRODUCT", value: product),
         string(name: "GIT_HASH", value: hash),
-        // TODO: 确认 build-common 是否可以不传入 TARGET_BRANCH
-        // string(name: "TARGET_BRANCH", value: ""),
         string(name: "RELEASE_TAG", value: tag),
         [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
     ]
@@ -185,10 +253,17 @@ def buildOne(repo, product, hash, arch, binary, tag) {
             wait: true,
             parameters: paramsBuild
 
+    def originalFilePath = "${FILE_SERVER_URL}/download/${binary}"
+    def patchFilePath = "${FILE_SERVER_URL}/download/builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
+    HOTFIX_BUILD_RESULT["results"][product]["tiup-patch-amd64"] = patchFilePath
+    buildTiupPatch("${FILE_SERVER_URL}/download/${binary}", product, patchFilePath, arch)
+    
+
     def hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}:${tag}"
     if (arch == "arm64") {
         hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}-arm64:${tag}"
     }
+    HOTFIX_BUILD_RESULT["results"][product]["image"] = hotfixImageName
     println "build hotfix image ${hotfixImageName}"
     def dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/${product}"
     def paramsDocker = [
@@ -206,8 +281,14 @@ def buildOne(repo, product, hash, arch, binary, tag) {
             parameters: paramsDocker
 }
 
+
 def buildBinaryByTag(repo, tag) {
     if (repo == "tidb") {
+        println "HOTFIX_BUILD_RESULT=${HOTFIX_BUILD_RESULT}"
+        HOTFIX_BUILD_RESULT["repo"] = "tidb"
+        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
+        HOTFIX_BUILD_RESULT["results"] = [:]
+        println "HOTFIX_BUILD_RESULT=${HOTFIX_BUILD_RESULT}"
         def builds = [:]
         def needBuildBr = false
         def needBuildDumpling = false
@@ -220,7 +301,10 @@ def buildBinaryByTag(repo, tag) {
         if (needBuildBr) {
             def brAmd64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-amd64.tar.gz"
             def brArm64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-arm64.tar.gz"
-
+            HOTFIX_BUILD_RESULT["results"]["br"] = [
+                "amd64": brAmd64Binary,
+                "arm64": brArm64Binary,
+            ]
             builds["br-amd64"] = {
                 buildOne(repo, "br", GIT_HASH, "amd64", brAmd64Binary, tag)
             }
@@ -231,7 +315,10 @@ def buildBinaryByTag(repo, tag) {
         if (needBuildDumpling) {
             def dumplingAmd64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-amd64.tar.gz"
             def dumplingArm64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-arm64.tar.gz"
-
+            HOTFIX_BUILD_RESULT["results"]["dumpling"] = [
+                "amd64": dumplingAmd64Binary,
+                "arm64": dumplingArm64Binary,
+            ]
             builds["dumpling-amd64"] = {
                 buildOne(repo, "dumpling", GIT_HASH, "amd64", dumplingAmd64Binary, tag) 
             }
@@ -241,6 +328,10 @@ def buildBinaryByTag(repo, tag) {
         }
         def tidbAmd64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-amd64.tar.gz"
         def tidbArm64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-arm64.tar.gz"
+        HOTFIX_BUILD_RESULT["results"]["tidb"] = [
+            "amd64": tidbAmd64Binary,
+            "arm64": tidbArm64Binary,
+        ]
         builds["tidb-amd64"] = {
             buildOne(repo, "tidb", GIT_HASH, "amd64", tidbAmd64Binary, tag)
         }
@@ -249,6 +340,12 @@ def buildBinaryByTag(repo, tag) {
         }
 
         parallel builds
+
+        println "build hotfix success"
+        println "build result: ${HOTFIX_BUILD_RESULT}"
+        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
     }
 }
 
