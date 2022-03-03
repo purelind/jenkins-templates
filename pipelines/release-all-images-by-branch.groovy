@@ -211,13 +211,13 @@ def release_one_normal(repo, needMultiArch) {
         buildProduct = "br"
     }
     stage("build binary") {
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}")) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}") && !FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64}"
             startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
         }
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}")) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}") && !FORCE_REBUILD) {
             echo "binary already build(arm64): ${buildInfo.binaryArm64}"
         } else {
             echo "build binary(arm64): ${buildInfo.binaryArm64}"
@@ -327,7 +327,7 @@ def release_one_enable_failpoint(repo) {
         if (repo == "tidb-lightning") {
             buildProduct = "br"
         }
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64Failpoint}")) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64Failpoint}") && !FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64Failpoint}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64Failpoint}"
@@ -368,7 +368,7 @@ def release_one_debug(repo) {
         if (repo == "tidb-lightning") {
             buildProduct = "br"
         }
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}")) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}") && !FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64}"
@@ -381,7 +381,7 @@ def release_one_debug(repo) {
         }
 
         println "build single arch image (linux amd64) with debug dockerfile"
-        println "debug image: ${buildInfo.imageNameAmd64Debug}"
+        println "debug image: ${buildInfo.imageNameForDebug}"
         def paramsDocker = [       
         string(name: "ARCH", value: "amd64"),
         string(name: "OS", value: "linux"),
@@ -401,9 +401,104 @@ def release_one_debug(repo) {
 }
 
 
+def release_master_monitoring() {
+    def sha1 = get_sha("monitoring")
+    def binary = "builds/pingcap/monitoring/test/master/${sha1}/linux/monitoring.tar.gz"
+    def arch = "amd64"
+    def paramsBuild = [
+        string(name: "ARCH", value: arch),
+        string(name: "OS", value: "linux"),
+        string(name: "EDITION", value: "community"),
+        string(name: "OUTPUT_BINARY", value: binary),
+        string(name: "REPO", value: "monitoring"),
+        string(name: "PRODUCT", value: "monitoring"),
+        string(name: "GIT_HASH", value: sha1),
+        string(name: "RELEASE_TAG", value: "master"),
+        string(name: "TARGET_BRANCH", value: "master"),
+        [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+    ]
+    println "paramsBuild: ${paramsBuild}"
+
+    build job: "build-common",
+        wait: true,
+        parameters: paramsBuild
+
+    def imageNameAmd64 = "${HARBOR_PROJECT_PREFIX}/monitoring:master-amd64"
+    def paramsDockerAmd64 = [       
+        string(name: "ARCH", value: "amd64"),
+        string(name: "OS", value: "linux"),
+        string(name: "INPUT_BINARYS", value: binary),
+        string(name: "REPO", value: "monitoring"),
+        string(name: "PRODUCT", value: "monitoring"),
+        string(name: "RELEASE_TAG", value: ""),
+        string(name: "DOCKERFILE", value: ""),
+        string(name: "RELEASE_DOCKER_IMAGES", value: imageNameAmd64),
+    ]
+    build job: "docker-common",
+        wait: true,
+        parameters: paramsDockerAmd64
+    def imageNameArm64 = "${HARBOR_PROJECT_PREFIX}/monitoring:master-arm64"
+    def paramsDockerArm64 = [       
+        string(name: "ARCH", value: "arm64"),
+        string(name: "OS", value: "linux"),
+        string(name: "INPUT_BINARYS", value: binary),
+        string(name: "REPO", value: "monitoring"),
+        string(name: "PRODUCT", value: "monitoring"),
+        string(name: "RELEASE_TAG", value: ""),
+        string(name: "DOCKERFILE", value: ""),
+        string(name: "RELEASE_DOCKER_IMAGES", value: imageNameArm64),
+        ]
+    build job: "docker-common",
+        wait: true,
+        parameters: paramsDockerArm64
+    def multiArchImage = "${HARBOR_PROJECT_PREFIX}/monitoring:master"
+    stage("manifest multiarch image") {
+            // start manifest-tool to make multi arch image
+            node("delivery") {
+                container("delivery") {
+                withCredentials([usernamePassword(credentialsId: 'harbor-pingcap', usernameVariable: 'harborUser', passwordVariable: 'harborPassword')]) {
+                    sh """
+                    docker login -u ${ harborUser} -p ${harborPassword} hub.pingcap.net
+                    cat <<EOF > manifest-monitoring-master.yaml
+image: ${multiArchImage}
+manifests:
+-
+    image: ${imageNameArm64}
+    platform:
+    architecture: arm64
+    os: linux
+-
+    image: ${imageNameAmd64}
+    platform:
+    architecture: amd64
+    os: linux
+
+EOF
+                    cat manifest-monitoring-master.yaml
+                    curl -o manifest-tool ${FILE_SERVER_URL}/download/cicd/tools/manifest-tool-linux-amd64
+                    chmod +x manifest-tool
+                    ./manifest-tool push from-spec manifest-monitoring-master.yaml
+                    """
+                }
+                archiveArtifacts artifacts: "manifest-monitoring-master.yaml", fingerprint: true
+                }
+            }
+            println "multi arch image: ${multiArchImage}"
+        }
+    
+}
+
+
+
 node("${GO_BUILD_SLAVE}") {
     container("golang") {
         builds = [:]
+        if ("${GIT_BRANCH}" == "master") {
+            builds["monitoring"] = {
+                release_master_monitoring()
+            }
+        }
+
         // releaseRepos = ["tidb-binlog","tics"]
         // for (item in releaseRepos) {
         //     def String product = "${item}"
@@ -412,29 +507,26 @@ node("${GO_BUILD_SLAVE}") {
         //         release_one_debug(product)
         //     }
         // }
-        builds["monitoring"] = {
-            release_one_normal("monitoring", true)
-        }
 
-        // releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
-        // for (item in releaseReposMultiArch) {
-        //     def String product = "${item}"
-        //     builds["${item}-multiarch"] = {
-        //         release_one_normal(product, true)
-        //         release_one_debug(product)
-        //     }
-        // }
-        // failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
-        // for (item in failpointRepos) {
-        //     def String product = "${item}"
-        //     builds["${item}-failpoint"] = {
-        //         release_one_enable_failpoint(product)
-        //     }
-        // }
+        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
+        for (item in releaseReposMultiArch) {
+            def String product = "${item}"
+            builds["${item}-multiarch"] = {
+                release_one_normal(product, true)
+                release_one_debug(product)
+            }
+        }
+        failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
+        for (item in failpointRepos) {
+            def String product = "${item}"
+            builds["${item}-failpoint"] = {
+                release_one_enable_failpoint(product)
+            }
+        }
         parallel builds
         
-        // stage("build other images") {
-        //     release_one_normal("tiflash", true)
-        // }
+        stage("build other images") {
+            release_one_normal("tiflash", true)
+        }
     }
 }
