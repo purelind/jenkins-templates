@@ -412,26 +412,29 @@ node("${GO_BUILD_SLAVE}") {
         //         release_one_debug(product)
         //     }
         // }
+        build["monitoring"] = {
+            release_one_normal("monitoring", true)
+        }
 
-        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
-        for (item in releaseReposMultiArch) {
-            def String product = "${item}"
-            builds["${item}-multiarch"] = {
-                release_one_normal(product, true)
-                release_one_debug(product)
-            }
-        }
-        failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
-        for (item in failpointRepos) {
-            def String product = "${item}"
-            builds["${item}-failpoint"] = {
-                release_one_enable_failpoint(product)
-            }
-        }
-        parallel builds
+        // releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
+        // for (item in releaseReposMultiArch) {
+        //     def String product = "${item}"
+        //     builds["${item}-multiarch"] = {
+        //         release_one_normal(product, true)
+        //         release_one_debug(product)
+        //     }
+        // }
+        // failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
+        // for (item in failpointRepos) {
+        //     def String product = "${item}"
+        //     builds["${item}-failpoint"] = {
+        //         release_one_enable_failpoint(product)
+        //     }
+        // }
+        // parallel builds
         
-        stage("build other images") {
-            release_one_normal("tiflash", true)
-        }
+        // stage("build other images") {
+        //     release_one_normal("tiflash", true)
+        // }
     }
 }
