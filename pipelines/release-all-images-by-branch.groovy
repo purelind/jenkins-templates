@@ -499,21 +499,19 @@ node("${GO_BUILD_SLAVE}") {
             }
         }
 
-        // releaseRepos = ["tidb-binlog","tics"]
-        // for (item in releaseRepos) {
-        //     def String product = "${item}"
-        //     builds["${item}-build"] = {
-        //         release_one_normal(product, false)
-        //         release_one_debug(product)
-        //     }
-        // }
+        releaseRepos = ["tics"]
+        for (item in releaseRepos) {
+            def String product = "${item}"
+            builds["${item}-build"] = {
+                release_one_normal(product, true)
+            }
+        }
 
-        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "tics"]
+        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog"]
         for (item in releaseReposMultiArch) {
             def String product = "${item}"
             builds["${item}-multiarch"] = {
                 release_one_normal(product, true)
-                release_one_debug(product)
             }
         }
         failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
