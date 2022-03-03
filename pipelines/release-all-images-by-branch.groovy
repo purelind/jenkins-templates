@@ -412,7 +412,7 @@ node("${GO_BUILD_SLAVE}") {
         //         release_one_debug(product)
         //     }
         // }
-        build["monitoring"] = {
+        builds["monitoring"] = {
             release_one_normal("monitoring", true)
         }
 
@@ -431,7 +431,7 @@ node("${GO_BUILD_SLAVE}") {
         //         release_one_enable_failpoint(product)
         //     }
         // }
-        // parallel builds
+        parallel builds
         
         // stage("build other images") {
         //     release_one_normal("tiflash", true)
