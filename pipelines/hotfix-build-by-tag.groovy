@@ -343,6 +343,8 @@ def buildBinaryByTag(repo, tag) {
 
         println "build hotfix success"
         println "build result: ${HOTFIX_BUILD_RESULT}"
+        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
         def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
         writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
         archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
@@ -351,11 +353,9 @@ def buildBinaryByTag(repo, tag) {
 
 def notifyToFeishu(buildResultFile) {
     println "notify to feishu: ${REPO} ${HOTFIX_TAG}"
-    HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
-    HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
     sh """
     wget ${FILE_SERVER_URL}/download/rd-index-agent/hotfix_builder_notify/tiinsights-hotfix-builder-notify.py
-    python3 tiinsights-hotfix-builder-notify.py ${buildResultFile} ${RUN_DISPLAY_URL}
+    python3 tiinsights-hotfix-builder-notify.py ${buildResultFile}
     """
 }
 
