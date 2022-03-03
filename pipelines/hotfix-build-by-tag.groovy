@@ -302,8 +302,8 @@ def buildBinaryByTag(repo, tag) {
             def brAmd64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-amd64.tar.gz"
             def brArm64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-arm64.tar.gz"
             HOTFIX_BUILD_RESULT["results"]["br"] = [
-                "amd64": brAmd64Binary,
-                "arm64": brArm64Binary,
+                "amd64": "${FILE_SERVER_URL}/download/${brAmd64Binary}",
+                "arm64": "${FILE_SERVER_URL}/download/${brArm64Binary}",
             ]
             builds["br-amd64"] = {
                 buildOne(repo, "br", GIT_HASH, "amd64", brAmd64Binary, tag)
@@ -316,8 +316,8 @@ def buildBinaryByTag(repo, tag) {
             def dumplingAmd64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-amd64.tar.gz"
             def dumplingArm64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-arm64.tar.gz"
             HOTFIX_BUILD_RESULT["results"]["dumpling"] = [
-                "amd64": dumplingAmd64Binary,
-                "arm64": dumplingArm64Binary,
+                "amd64": "${FILE_SERVER_URL}/download/${dumplingAmd64Binary}",
+                "arm64": "${FILE_SERVER_URL}/download/${dumplingArm64Binary}",
             ]
             builds["dumpling-amd64"] = {
                 buildOne(repo, "dumpling", GIT_HASH, "amd64", dumplingAmd64Binary, tag) 
@@ -329,8 +329,8 @@ def buildBinaryByTag(repo, tag) {
         def tidbAmd64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-amd64.tar.gz"
         def tidbArm64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-arm64.tar.gz"
         HOTFIX_BUILD_RESULT["results"]["tidb"] = [
-            "amd64": tidbAmd64Binary,
-            "arm64": tidbArm64Binary,
+            "amd64": "${FILE_SERVER_URL}/download/${tidbAmd64Binary}",
+            "arm64": "${FILE_SERVER_URL}/download/${tidbArm64Binary}",
         ]
         builds["tidb-amd64"] = {
             buildOne(repo, "tidb", GIT_HASH, "amd64", tidbAmd64Binary, tag)
@@ -349,11 +349,13 @@ def buildBinaryByTag(repo, tag) {
     }
 }
 
-def notifyToFeishu(repo, tag, binary_path, docker_image_name, build_url) {
-    println "notify to feishu: ${repo} ${tag}"
+def notifyToFeishu(buildResultFile) {
+    println "notify to feishu: ${REPO} ${HOTFIX_TAG}"
+    HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+    HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
     sh """
     wget ${FILE_SERVER_URL}/download/rd-index-agent/hotfix_builder_notify/tiinsights-hotfix-builder-notify.py
-    python3 tiinsights-hotfix-builder-notify.py ${repo} ${tag} ${binary_path} ${docker_image_name} ${build_url}
+    python3 tiinsights-hotfix-builder-notify.py ${buildResultFile} ${RUN_DISPLAY_URL}
     """
 }
 
@@ -362,13 +364,15 @@ run_with_pod {
     container("golang") {
         stage("hotfix-${REPO}") {
             if (!validHotfixTag(HOTFIX_TAG)) {
-                println "invalid hotfix tag ${tag}"
+                println "invalid hotfix tag ${HOTFIX_TAG}"
                 exit 1
             }
             def ws = pwd()
-            dir("${repo}") {
+            dir("${REPO}") {
                 checkOutCode(REPO, HOTFIX_TAG)
                 buildBinaryByTag(REPO, HOTFIX_TAG)
+
+                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
             }
         }
     }
