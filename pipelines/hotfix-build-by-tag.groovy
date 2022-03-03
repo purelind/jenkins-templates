@@ -213,6 +213,7 @@ def checkOutCode(repo, tag) {
 
 def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     if (packageName in ["tikv", "tidb", "pd", "ticdc"]) {
+        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-amd64"] = patchFile
         println "build tiup patch for ${packageName}"
         run_with_lightweight_pod {
             container("golang") {
@@ -255,7 +256,6 @@ def buildOne(repo, product, hash, arch, binary, tag) {
 
     def originalFilePath = "${FILE_SERVER_URL}/download/${binary}"
     def patchFilePath = "${FILE_SERVER_URL}/download/builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
-    HOTFIX_BUILD_RESULT["results"][product]["tiup-patch-amd64"] = patchFilePath
     buildTiupPatch("${FILE_SERVER_URL}/download/${binary}", product, patchFilePath, arch)
     
 
