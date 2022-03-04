@@ -388,6 +388,7 @@ mkdir -p ${TARGET}/bin
 cp bin/* ${TARGET}/bin/   
 """
 
+// only support dm version >= 5.3.0 (dm in repo tiflow)
 buildsh["dm"] = """
 if [ ${RELEASE_TAG}x != ''x ];then
     for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
