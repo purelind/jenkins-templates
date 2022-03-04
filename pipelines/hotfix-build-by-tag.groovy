@@ -17,15 +17,21 @@ notify to feishu
 
 */
 
+// test params
+// tidb  v5.4.0-20220223
+// tiflow v5.1.1-20211227
+// pd v5.0.4-20211208
+// tikv v5.3.0-20220107
+
 properties([
         parameters([
                 string(
-                        defaultValue: 'tidb',
+                        defaultValue: 'tiflow',
                         name: 'REPO',
                         trim: true
                 ),
                 string(
-                        defaultValue: 'v5.4.0-20220223',
+                        defaultValue: 'v5.1.1-20211227',
                         name: 'HOTFIX_TAG',
                         trim: true
                 ),
@@ -40,18 +46,24 @@ properties([
 buildPathMap = [
     "tidb": 'go/src/github.com/pingcap/tidb',
     "tiflow": 'go/src/github.com/pingcap/tiflow',
+    "pd": 'go/src/github.com/tikv/pd',
+    "tikv": 'tikv',
+
 ]
 
 repoUrlMap = [
     "tidb": "git@github.com:pingcap/tidb.git",
-    "tiflow": "git@github.com:pingcap/tiflow.git"
+    "tiflow": "git@github.com:pingcap/tiflow.git",
+    "pd": "git@github.com:tikv/pd.git",
+    "tikv": "git@github.com:tikv/tikv.git",
 ]
 
 tiupPatchBinaryMap = [
     "tidb": "tidb-server",
     "tikv": "tikv-server",
-    "ticdc": "ticdc-server",
+    "ticdc": "cdc",
     "dm": "dm-master,dm-worker,dmctl",
+    "pd": "pd-server",
 ]
 
 
@@ -62,7 +74,8 @@ HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
 HOTFIX_BUILD_RESULT_FILE = "hotfix_build_result-${REPO}-${HOTFIX_TAG}.json"
 HOTFIX_BUILD_RESULT = [:]
 HOTFIX_BUILD_RESULT["repo"] = REPO
-HOTFIX_BUILD_RESULT["tag"] = HOTFIX_TAG
+
+buildMap = [:]
 
 // tag example : v5.3.1-20210221
 def selectImageGoVersion(repo, tag) {
@@ -349,6 +362,104 @@ def buildBinaryByTag(repo, tag) {
         writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
         archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
     }
+    if (repo == "pd") {
+        HOTFIX_BUILD_RESULT["repo"] = "pd"
+        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
+        HOTFIX_BUILD_RESULT["results"] = [:]
+        def packageName = "pd"
+        def builds = [:]
+        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
+        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
+        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
+            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
+        ]
+        builds["${packageName}-amd64"] = {
+            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
+        }
+        builds["${packageName}-arm64"] = {
+            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
+        }
+
+        parallel builds
+
+        println "build hotfix success"
+        println "build result: ${HOTFIX_BUILD_RESULT}"
+        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
+        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
+    }
+
+    if (repo == "tikv") {
+        HOTFIX_BUILD_RESULT["repo"] = "tikv"
+        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
+        HOTFIX_BUILD_RESULT["results"] = [:]
+        def packageName = "tikv"
+        def builds = [:]
+        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
+        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
+        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
+            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
+        ]
+        builds["${packageName}-amd64"] = {
+            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
+        }
+        builds["${packageName}-arm64"] = {
+            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
+        }
+
+        parallel builds
+
+        println "build hotfix success"
+        println "build result: ${HOTFIX_BUILD_RESULT}"
+        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
+        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
+    }
+
+    if (repo == "tiflow") {
+        def packageName = "ticdc"
+        HOTFIX_BUILD_RESULT["repo"] = "tiflow"
+        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
+        HOTFIX_BUILD_RESULT["results"] = [:]
+        // TODO build-common and docker-common support dm (repo tiflow version >= v5.3.0)
+        // def needBuildDm = false
+        // build dm binary
+        // build dm docker image
+
+        // default build ticdc binary and image
+        def builds = [:]
+        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
+        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
+        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
+            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
+        ]
+        builds["${packageName}-amd64"] = {
+            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
+        }
+        builds["${packageName}-arm64"] = {
+            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
+        }
+
+        parallel builds
+
+        println "build hotfix success"
+        println "build result: ${HOTFIX_BUILD_RESULT}"
+        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
+        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
+    }
+
+    currentBuild.description = "hotfix build ${repo} ${tag}"
+    // currentBuild.description += "\n"
 }
 
 def notifyToFeishu(buildResultFile) {
@@ -358,6 +469,10 @@ def notifyToFeishu(buildResultFile) {
     python3 tiinsights-hotfix-builder-notify.py ${buildResultFile}
     """
 }
+
+// TODO
+// verify the build result: binary and docker image
+// def verifyBuildResult() {
 
 
 run_with_pod {
