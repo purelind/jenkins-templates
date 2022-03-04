@@ -388,6 +388,31 @@ mkdir -p ${TARGET}/bin
 cp bin/* ${TARGET}/bin/   
 """
 
+buildsh["dm"] = """
+if [ ${RELEASE_TAG}x != ''x ];then
+    for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
+    git tag -f ${RELEASE_TAG} ${GIT_HASH}
+    git branch -D refs/tags/${RELEASE_TAG} || true
+    git checkout -b refs/tags/${RELEASE_TAG}
+fi;
+if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+    export PATH=${binPath}
+fi;
+make dm
+ls -alh bin/
+rm -rf ${TARGET}
+mkdir -p ${TARGET}/bin
+mkdir -p ${TARGET}/conf  
+cp bin/* ${TARGET}/bin/
+mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
+mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
+mv dm/dm/master/dm-master.toml ${TARGET}/conf/
+mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
+mv LICENSE ${TARGET}/
+curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
+mv mydumper-latest-linux-amd64/bin/mydumper ${TARGET}/bin/ && rm -rf mydumper-latest-linux-amd64
+"""
+
 buildsh["br"] = """
 if [ ${RELEASE_TAG}x != ''x ];then
     for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
