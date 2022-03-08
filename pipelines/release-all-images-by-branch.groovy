@@ -46,8 +46,8 @@ HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
 // TODO: remove debug code
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
 
-// for master branch: use default local tag: v5.5.0-nightly
-RELEASE_TAG = "v5.5.0-nightly"
+// for master branch: use default local tag: v6.0.0-nightly
+RELEASE_TAG = "v6.0.0-nightly"
 if (GIT_BRANCH.startsWith("release-")) {
     RELEASE_TAG = "v"+ trimPrefix(GIT_BRANCH) + ".0-nightly"
 }
@@ -111,6 +111,10 @@ def parseBuildInfo(repo) {
     }
     // Notice: repo ticdc has been renamed to tiflow from 2022/0/01, so we need to use tiflow as actual repo
     if (repo == "ticdc") {
+        actualRepo = "tiflow"
+    }
+    // Notice: dm has been merged to tiflow from release-5.3.0, so we need to use tiflow as actual repo
+    if (repo == "dm") {
         actualRepo = "tiflow"
     }
     if (repo == "tiflash") {
@@ -507,11 +511,12 @@ node("${GO_BUILD_SLAVE}") {
             }
         }
 
-        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog"]
+        releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm"]
         for (item in releaseReposMultiArch) {
             def String product = "${item}"
             builds["${item}-multiarch"] = {
                 release_one_normal(product, true)
+                release_one_debug(product)
             }
         }
         failpointRepos = ["tidb","pd","tikv","br", "tidb-lightning"]
