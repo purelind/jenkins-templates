@@ -69,7 +69,7 @@ tiupPatchBinaryMap = [
 
 
 GIT_HASH = ""
-HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+HARBOR_PROJECT_PREFIX = "hub.pingcap.net/hotfix"
 
 HOTFIX_BUILD_RESULT_FILE = "hotfix_build_result-${REPO}-${HOTFIX_TAG}.json"
 HOTFIX_BUILD_RESULT = [:]
