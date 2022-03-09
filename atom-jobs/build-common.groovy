@@ -220,13 +220,29 @@ def checkoutCode() {
         rm -f src-${REPO}.tar.gz
         """
         sh "chown -R 1000:1000 ./"
+    } else {
+        def codeCacheInFileserverUrl = "${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-${REPO}.tar.gz"
+        def cacheExisted = sh(returnStatus: true, script: """
+            if curl --output /dev/null --silent --head --fail ${codeCacheInFileserverUrl}; then exit 0; else exit 1; fi
+            """)
+        if (cacheExisted == 0) {
+            println "get code from fileserver to reduce clone time"
+            println "codeCacheInFileserverUrl=${codeCacheInFileserverUrl}"
+            sh """
+            curl -O ${codeCacheInFileserverUrl}
+            tar -xzf src-${REPO}.tar.gz --strip-components=1
+            rm -f src-${REPO}.tar.gz
+            """
+        } else {
+            println "get code from github"
+        }
     }
     checkout changelog: false, poll: true,
                     scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
                                     [$class: 'CloneOption', timeout: 60],
                                     [$class: 'PruneStaleBranch'],
-                                    [$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
+                                    [$class: 'SubmoduleOption', timeout: 30, disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
                                     [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
                         userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
                                             refspec      : specRef,
@@ -369,6 +385,32 @@ make build
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin    
 cp bin/* ${TARGET}/bin/   
+"""
+
+// only support dm version >= 5.3.0 (dm in repo tiflow)
+buildsh["dm"] = """
+if [ ${RELEASE_TAG}x != ''x ];then
+    for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
+    git tag -f ${RELEASE_TAG} ${GIT_HASH}
+    git branch -D refs/tags/${RELEASE_TAG} || true
+    git checkout -b refs/tags/${RELEASE_TAG}
+fi;
+if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+    export PATH=${binPath}
+fi;
+make dm
+ls -alh bin/
+rm -rf ${TARGET}
+mkdir -p ${TARGET}/bin
+mkdir -p ${TARGET}/conf  
+cp bin/* ${TARGET}/bin/
+mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
+mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
+mv dm/dm/master/dm-master.toml ${TARGET}/conf/
+mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
+mv LICENSE ${TARGET}/
+curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
+mv mydumper-latest-linux-amd64/bin/mydumper ${TARGET}/bin/ && rm -rf mydumper-latest-linux-amd64
 """
 
 buildsh["br"] = """
@@ -529,11 +571,8 @@ if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 if [ ${OS} == 'linux' ]; then
-    grpcio_ver=`grep -A 1 'name = "grpcio"' Cargo.lock | tail -n 1 | cut -d '"' -f 2`
-    if [[ ! "0.8.0" > "\$grpcio_ver" ]]; then
-        echo using gcc 8
-        source /opt/rh/devtoolset-8/enable
-    fi;
+    echo using gcc 8
+    source /opt/rh/devtoolset-8/enable
 fi;
 if [ ${failpoint} == 'true' ]; then
     CARGO_TARGET_DIR=.target ROCKSDB_SYS_STATIC=1 make fail_release
@@ -553,11 +592,8 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-grpcio_ver=`grep -A 1 'name = "grpcio"' Cargo.lock | tail -n 1 | cut -d '"' -f 2`
-if [[ ! "0.8.0" > "\$grpcio_ver" ]]; then
-    echo using gcc 8
-    source /opt/rh/devtoolset-8/enable
-fi
+echo using gcc 8
+source /opt/rh/devtoolset-8/enable
 if [[ ${ARCH} == 'arm64' ]]; then
     ROCKSDB_SYS_SSE=0 make release
 else
@@ -568,12 +604,14 @@ mkdir -p ${TARGET}/bin
 cp target/release/tikv-importer ${TARGET}/bin
 """
 
+// NOTE: remove param --auto-push for pull-monitoring 
+//      we don't want to auto create pull request in repo https://github.com/pingcap/monitoring/pulls
 buildsh["monitoring"] = """
 if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go build -o pull-monitoring  cmd/monitoring.go
-./pull-monitoring  --config=monitoring.yaml --auto-push --tag=${RELEASE_TAG} --token=\$TOKEN
+./pull-monitoring  --config=monitoring.yaml --tag=${RELEASE_TAG} --token=\$TOKEN
 rm -rf ${TARGET}
 mkdir -p ${TARGET}
 mv monitor-snapshot/${RELEASE_TAG}/operator/* ${TARGET}
@@ -610,7 +648,7 @@ fi;
 buildsh["enterprise-plugin"] = """
 cd ../
 rm -rf tidb
-git clone https://github.com/pingcap/tidb.git
+git clone --depth 1 https://github.com/pingcap/tidb.git
 cd tidb
 git reset --hard ${TIDB_HASH}
 cd cmd/pluginpkg

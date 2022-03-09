@@ -61,6 +61,7 @@ def get_sha(repo) {
     return sh(returnStdout: true, script: "python gethash.py -repo=${repo} -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
 }
 
+
 def test_binary_already_build(binary_url) {
     cacheExisted = sh(returnStatus: true, script: """
     if curl --output /dev/null --silent --head --fail ${binary_url}; then exit 0; else exit 1; fi
