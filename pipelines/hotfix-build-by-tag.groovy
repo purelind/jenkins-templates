@@ -261,6 +261,7 @@ def buildOne(repo, product, hash, arch, binary, tag) {
         string(name: "PRODUCT", value: product),
         string(name: "GIT_HASH", value: hash),
         string(name: "RELEASE_TAG", value: tag),
+        [$class: 'BooleanParameterValue', name: 'NEED_SOURCE_CODE', value: true],
         [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
     ]
     build job: "build-common",
