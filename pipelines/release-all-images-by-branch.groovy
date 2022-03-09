@@ -41,6 +41,9 @@ properties([
 //            it contains two images: ${HARBOR_PROJECT_PREFIX}/tidb:master-linux-amd64 and ${HARBOR_PROJECT_PREFIX}/tidb:master-linux-arm64
 // ***
 
+string trimPrefix = {
+    it.startsWith('release-') ? it.minus('release-').split("-")[0] : it 
+}
 
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
 // TODO: remove debug code
@@ -52,9 +55,6 @@ if (GIT_BRANCH.startsWith("release-")) {
     RELEASE_TAG = "v"+ trimPrefix(GIT_BRANCH) + ".0-nightly"
 }
 
-string trimPrefix = {
-    it.startsWith('release-') ? it.minus('release-').split("-")[0] : it 
-}
 
 def get_sha(repo) {
     sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
@@ -92,9 +92,6 @@ def startBuildBinary(arch, binary, actualRepo, repo, sha1) {
         parameters: paramsBuild
 }
 
-def run_with_docker_pod() {
-
-}
 
 def parseBuildInfo(repo) {
     def actualRepo = repo
@@ -117,9 +114,9 @@ def parseBuildInfo(repo) {
     if (repo == "dm") {
         actualRepo = "tiflow"
     }
-    if (repo == "tiflash") {
-        actualRepo = "tics"
-    }
+    // if (repo == "tiflash") {
+    //     actualRepo = "tics"
+    // }
     // TODO: tidb-lightning is so complex !!!
     // tidb-lightning is a part of br, and br is merged to tidb from release-5.2, so we need to use tidb as actual repo
     if (repo == "tidb-lightning") { // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb as actual repo
@@ -169,10 +166,10 @@ def parseBuildInfo(repo) {
         dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
         dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/tiflash"
     }
-    if (repo == "tiflash") {
-        binaryAmd64 = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/tics.tar.gz"
-        binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/tics-linux-arm64.tar.gz"
-    }
+    // if (repo == "tiflash") {
+    //     binaryAmd64 = "builds/pingcap/tics/test/${GIT_BRANCH}/${sha1}/linux-amd64/tics.tar.gz"
+    //     binaryArm64 = "builds/pingcap/test/tics/${sha1}/centos7/tics-linux-arm64.tar.gz"
+    // }
     if (repo == "tidb-lightning") {
         // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb binary
         // tar package of tidb build by atom-job include these binaries:
@@ -235,8 +232,14 @@ def release_one_normal(repo, needMultiArch) {
 
         def dockerRepo = buildInfo.actualRepo
         def dockerProduct = repo
+        def amd64Images = buildInfo.imageNameAmd64
+        def arm64Images = buildInfo.imageNameArm64
         if (repo == "tidb-lightning") {
             dockerProduct = "br"
+        }
+        if (repo == "tics") {
+            amd64Images = "${buildInfo.imageNameAmd64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-amd64"
+            arm64Images = "${buildInfo.imageNameArm64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-arm64"
         }
         stage("build amd64 image") {
             def paramsDockerAmd64 = [       
@@ -247,7 +250,7 @@ def release_one_normal(repo, needMultiArch) {
             string(name: "PRODUCT", value: dockerProduct),
             string(name: "RELEASE_TAG", value: RELEASE_TAG),
             string(name: "DOCKERFILE", value: buildInfo.dockerfileAmd64),
-            string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameAmd64),
+            string(name: "RELEASE_DOCKER_IMAGES", value: amd64Images),
             ]
             build job: "docker-common",
                 wait: true,
@@ -263,7 +266,7 @@ def release_one_normal(repo, needMultiArch) {
                 string(name: "PRODUCT", value: dockerProduct),
                 string(name: "RELEASE_TAG", value: RELEASE_TAG),
                 string(name: "DOCKERFILE", value: buildInfo.dockerfileArm64),
-                string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameArm64),
+                string(name: "RELEASE_DOCKER_IMAGES", value: arm64Images),
             ]
             build job: "docker-common",
                 wait: true,
@@ -297,12 +300,39 @@ EOF
                     chmod +x manifest-tool
                     ./manifest-tool push from-spec manifest-${repo}-${GIT_BRANCH}.yaml
                     """
+                    if (repo == "tics") {
+                        sh """
+                        docker login -u ${ harborUser} -p ${harborPassword} hub.pingcap.net
+                        cat <<EOF > manifest-tiflash-${GIT_BRANCH}.yaml
+image: ${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}
+manifests:
+-
+    image: ${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-arm64
+    platform:
+    architecture: arm64
+    os: linux
+-
+    image: ${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-amd64
+    platform:
+    architecture: amd64
+    os: linux
+
+EOF
+                        cat manifest-${repo}-${GIT_BRANCH}.yaml
+                        curl -o manifest-tool ${FILE_SERVER_URL}/download/cicd/tools/manifest-tool-linux-amd64
+                        chmod +x manifest-tool
+                        ./manifest-tool push from-spec manifest-tiflash-${GIT_BRANCH}.yaml
+                        """
+                    }
                 }
                 archiveArtifacts artifacts: "manifest-${repo}-${GIT_BRANCH}.yaml", fingerprint: true
+                if (repo == "tics") {
+                    archiveArtifacts artifacts: "manifest-tiflash-${GIT_BRANCH}.yaml", fingerprint: true
                 }
             }
             println "multi arch image: ${multiArchImage}"
-        } 
+            } 
+        }
     } else {
         println "build single arch image (linux amd64)"
         def paramsDocker = [       
@@ -502,7 +532,6 @@ node("${GO_BUILD_SLAVE}") {
                 release_master_monitoring()
             }
         }
-
         releaseRepos = ["tics"]
         for (item in releaseRepos) {
             def String product = "${item}"
@@ -510,7 +539,6 @@ node("${GO_BUILD_SLAVE}") {
                 release_one_normal(product, true)
             }
         }
-
         releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm"]
         for (item in releaseReposMultiArch) {
             def String product = "${item}"
@@ -527,9 +555,5 @@ node("${GO_BUILD_SLAVE}") {
             }
         }
         parallel builds
-        
-        stage("build other images") {
-            release_one_normal("tiflash", true)
-        }
     }
 }
