@@ -13,17 +13,20 @@ properties([
                 booleanParam(
                         defaultValue: false,
                         name: 'FORCE_REBUILD'
-                )
+                ),
+                booleanParam(
+                        defaultValue: false,
+                        name: 'NEED_MULTIARCH'
+                ),
         ]),
         // pipelineTriggers([
         //     parameterizedCron('''
-        //         # H H(0-23)/4 * * * % GIT_BRANCH=release-4.0
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.0
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.1
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.2
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.3
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.4
-        //         H H(0-23)/12 * * * % GIT_BRANCH=master
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.0 FORCE_REBUILD=false NEED_MULTIARCH=false
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.1 FORCE_REBUILD=false NEED_MULTIARCH=false
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.2 FORCE_REBUILD=false NEED_MULTIARCH=false
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.3 FORCE_REBUILD=false NEED_MULTIARCH=false
+        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.4 FORCE_REBUILD=false NEED_MULTIARCH=false
+        //         H H(0-23)/12 * * * % GIT_BRANCH=master FORCE_REBUILD=false NEED_MULTIARCH=true
         //     ''')
         // ])
 ])
@@ -204,7 +207,7 @@ def parseBuildInfo(repo) {
 }
 
 
-def release_one_normal(repo, needMultiArch) {
+def release_one_normal(repo) {
     def buildInfo = parseBuildInfo(repo)
 
     def buildRepo = buildInfo.actualRepo
@@ -213,21 +216,23 @@ def release_one_normal(repo, needMultiArch) {
         buildProduct = "br"
     }
     stage("build binary") {
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}") && !FORCE_REBUILD) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}") && !params.FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64}"
             startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
         }
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}") && !FORCE_REBUILD) {
-            echo "binary already build(arm64): ${buildInfo.binaryArm64}"
-        } else {
-            echo "build binary(arm64): ${buildInfo.binaryArm64}"
-            startBuildBinary("arm64", buildInfo.binaryArm64, buildRepo, buildProduct, buildInfo.sha1)
+        if (params.NEED_MULTIARCH) {
+            if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}") && !params.FORCE_REBUILD) {
+                echo "binary already build(arm64): ${buildInfo.binaryArm64}"
+            } else {
+                echo "build binary(arm64): ${buildInfo.binaryArm64}"
+                startBuildBinary("arm64", buildInfo.binaryArm64, buildRepo, buildProduct, buildInfo.sha1)
+            }
         }
     }
 
-    if (needMultiArch) {
+    if (params.NEED_MULTIARCH) {
         println "build multi arch image"
         def multiArchImage = buildInfo.imageName
 
@@ -335,16 +340,24 @@ EOF
             } 
         }
     } else {
-        println "build single arch image (linux amd64)"
-        def paramsDocker = [       
+        println "build single arch image ${repo} (linux amd64)"
+        def dockerProduct = repo
+        def amd64Images = buildInfo.imageNameAmd64
+        if (repo == "tidb-lightning") {
+            dockerProduct = "br"
+        }
+        if (repo == "tics") {
+            amd64Images = "${buildInfo.imageNameAmd64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-amd64"
+        }
+        def paramsDockerAmd64 = [       
         string(name: "ARCH", value: "amd64"),
         string(name: "OS", value: "linux"),
         string(name: "INPUT_BINARYS", value: buildInfo.binaryAmd64),
         string(name: "REPO", value: buildInfo.actualRepo),
-        string(name: "PRODUCT", value: repo),
+        string(name: "PRODUCT", value: dockerProduct),
         string(name: "RELEASE_TAG", value: RELEASE_TAG),
         string(name: "DOCKERFILE", value: buildInfo.dockerfileAmd64),
-        string(name: "RELEASE_DOCKER_IMAGES", value: buildInfo.imageNameAmd64),
+        string(name: "RELEASE_DOCKER_IMAGES", value: amd64Images),
         ]
         build job: "docker-common",
             wait: true,
@@ -537,14 +550,14 @@ node("${GO_BUILD_SLAVE}") {
         for (item in releaseRepos) {
             def String product = "${item}"
             builds["${item}-build"] = {
-                release_one_normal(product, true)
+                release_one_normal(product)
             }
         }
         releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm"]
         for (item in releaseReposMultiArch) {
             def String product = "${item}"
             builds["${item}-multiarch"] = {
-                release_one_normal(product, true)
+                release_one_normal(product)
                 release_one_debug(product)
             }
         }
