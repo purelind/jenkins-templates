@@ -19,16 +19,16 @@ properties([
                         name: 'NEED_MULTIARCH'
                 ),
         ]),
-        // pipelineTriggers([
-        //     parameterizedCron('''
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.0 FORCE_REBUILD=false NEED_MULTIARCH=false
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.1 FORCE_REBUILD=false NEED_MULTIARCH=false
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.2 FORCE_REBUILD=false NEED_MULTIARCH=false
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.3 FORCE_REBUILD=false NEED_MULTIARCH=false
-        //         H H(0-23)/12 * * * % GIT_BRANCH=release-5.4 FORCE_REBUILD=false NEED_MULTIARCH=false
-        //         H H(0-23)/12 * * * % GIT_BRANCH=master FORCE_REBUILD=false NEED_MULTIARCH=true
-        //     ''')
-        // ])
+        pipelineTriggers([
+            parameterizedCron('''
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.0 FORCE_REBUILD=false NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.1 FORCE_REBUILD=false NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.2 FORCE_REBUILD=false NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.3 FORCE_REBUILD=false NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.4 FORCE_REBUILD=false NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=master FORCE_REBUILD=false NEED_MULTIARCH=true
+            ''')
+        ])
 ])
 
 
@@ -49,8 +49,7 @@ string trimPrefix = {
 }
 
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
-// TODO: remove debug code
-HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+
 
 // for master branch: use default local tag: v6.0.0-nightly
 RELEASE_TAG = "v6.0.0-nightly"
