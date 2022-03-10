@@ -556,7 +556,11 @@ node("${GO_BUILD_SLAVE}") {
         releaseReposMultiArch = ["tidb","tikv","pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm"]
         for (item in releaseReposMultiArch) {
             def String product = "${item}"
-            builds["${item}-multiarch"] = {
+            def String stageName = "${product}-multi-arch"
+            if (!params.NEED_MULTIARCH) {
+                stageName = "${product}"
+            }
+            builds[stageName] = {
                 release_one_normal(product)
                 release_one_debug(product)
             }
