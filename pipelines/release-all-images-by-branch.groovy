@@ -21,12 +21,12 @@ properties([
         ]),
         pipelineTriggers([
             parameterizedCron('''
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.0 FORCE_REBUILD=false NEED_MULTIARCH=false
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.1 FORCE_REBUILD=false NEED_MULTIARCH=false
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.2 FORCE_REBUILD=false NEED_MULTIARCH=false
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.3 FORCE_REBUILD=false NEED_MULTIARCH=false
-                H H(0-23)/12 * * * % GIT_BRANCH=release-5.4 FORCE_REBUILD=false NEED_MULTIARCH=false
-                H H(0-23)/12 * * * % GIT_BRANCH=master FORCE_REBUILD=false NEED_MULTIARCH=true
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.0;FORCE_REBUILD=false;NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.1;FORCE_REBUILD=false;NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.2;FORCE_REBUILD=false;NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.3;FORCE_REBUILD=false;NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=release-5.4;FORCE_REBUILD=false;NEED_MULTIARCH=false
+                H H(0-23)/12 * * * % GIT_BRANCH=master;FORCE_REBUILD=false;NEED_MULTIARCH=true
             ''')
         ])
 ])
@@ -75,7 +75,8 @@ def test_binary_already_build(binary_url) {
     }
 }
 
-def startBuildBinary(arch, binary, actualRepo, repo, sha1) {
+def startBuildBinary(arch, binary, actualRepo, repo, sha1, failpoint) {
+
     def paramsBuild = [
     string(name: "ARCH", value: arch),
     string(name: "OS", value: "linux"),
@@ -87,6 +88,7 @@ def startBuildBinary(arch, binary, actualRepo, repo, sha1) {
     string(name: "RELEASE_TAG", value: RELEASE_TAG),
     string(name: "TARGET_BRANCH", value: GIT_BRANCH),
     [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+    [$class: 'BooleanParameterValue', name: 'FAILPOINT', value: failpoint],
     ]
     println "paramsBuild: ${paramsBuild}"
 
@@ -226,14 +228,14 @@ def release_one_normal(repo) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64}"
-            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
+            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1, false)
         }
         if (params.NEED_MULTIARCH) {
             if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryArm64}") && !params.FORCE_REBUILD) {
                 echo "binary already build(arm64): ${buildInfo.binaryArm64}"
             } else {
                 echo "build binary(arm64): ${buildInfo.binaryArm64}"
-                startBuildBinary("arm64", buildInfo.binaryArm64, buildRepo, buildProduct, buildInfo.sha1)
+                startBuildBinary("arm64", buildInfo.binaryArm64, buildRepo, buildProduct, buildInfo.sha1, false)
             }
         }
     }
@@ -381,11 +383,11 @@ def release_one_enable_failpoint(repo) {
         if (repo == "tidb-lightning") {
             buildProduct = "br"
         }
-        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64Failpoint}") && !FORCE_REBUILD) {
+        if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64Failpoint}") && !params.FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64Failpoint}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64Failpoint}"
-            startBuildBinary("amd64", buildInfo.binaryAmd64Failpoint, buildRepo, buildProduct, buildInfo.sha1)
+            startBuildBinary("amd64", buildInfo.binaryAmd64Failpoint, buildRepo, buildProduct, buildInfo.sha1, true)
         }
 
         def dockerRepo = buildInfo.actualRepo
@@ -426,7 +428,7 @@ def release_one_debug(repo) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
         } else {
             echo "build binary(amd64): ${buildInfo.binaryAmd64}"
-            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1)
+            startBuildBinary("amd64", buildInfo.binaryAmd64, buildRepo, buildProduct, buildInfo.sha1, false)
         }
         def dockerRepo = buildInfo.actualRepo
         def dockerProduct = repo
