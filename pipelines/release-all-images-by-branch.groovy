@@ -163,13 +163,6 @@ def parseBuildInfo(repo) {
     def binaryAmd64 = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
     def binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
     def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
-
-    // TODO: remove this after tikv amd64 issue workaround: libstdc++.so.6 not found
-    // 20220310: tikv amd64 issue workaround: libstdc++.so.6 not found
-    if (repo == "tikv" && GIT_BRANCH == "master") {
-        dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/4dd6c924a402aa8eb89c3f6435fc7b5a4eb16f8d/jenkins/Dockerfile/release/linux-amd64/tikv"
-    }
-
     def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
     def binaryAmd64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
     def binaryArm64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-arm64/${repo}.tar.gz"
