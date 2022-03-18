@@ -129,8 +129,11 @@ def build_image() {
         sh buildImgagesh[PRODUCT]
     } else { // 如果没定义，使用默认构建脚本
         sh """
+        rm -rf tmp-docker-build
+        mkdir -p tmp-docker-build
+        cd tmp-docker-build
         cp /usr/local/go/lib/time/zoneinfo.zip ./
-        cp bin/* ./
+        cp ../bin/* ./
         curl -o Dockerfile ${DOCKERFILE}
         docker build  -t ${imagePlaceHolder} .
         """
