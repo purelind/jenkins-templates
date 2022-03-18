@@ -657,7 +657,8 @@ fi;
 go version
 cd ../
 rm -rf tidb
-git clone --depth 1 https://github.com/pingcap/tidb.git
+curl -O ${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-tidb.tar.gz
+tar -xf src-tidb.tar.gz
 cd tidb
 git reset --hard ${TIDB_HASH}
 cd cmd/pluginpkg
