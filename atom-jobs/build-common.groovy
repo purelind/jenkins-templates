@@ -670,17 +670,17 @@ go mod tidy
 cd ..
 ../tidb/cmd/pluginpkg/pluginpkg -pkg-dir whitelist -out-dir whitelist
 md5sum whitelist/whitelist-1.so > whitelist/whitelist-1.so.md5
-curl -F builds/pingcap/tidb-plugins/${RELEASE_TAG}/centos7/whitelist-1.so.md5=@whitelist/whitelist-1.so.md5 ${FILE_SERVER_URL}/upload
-curl -F builds/pingcap/tidb-plugins/${RELEASE_TAG}/centos7/whitelist-1.so=@whitelist/whitelist-1.so ${FILE_SERVER_URL}/upload
 cd audit
 go mod tidy
 cd ..
 ../tidb/cmd/pluginpkg/pluginpkg -pkg-dir audit -out-dir audit
 md5sum audit/audit-1.so > audit/audit-1.so.md5
-curl -F builds/pingcap/tidb-plugins/${RELEASE_TAG}/centos7/audit-1.so.md5=@audit/audit-1.so.md5 ${FILE_SERVER_URL}/upload
-curl -F builds/pingcap/tidb-plugins/${RELEASE_TAG}/centos7/audit-1.so=@audit/audit-1.so ${FILE_SERVER_URL}/upload
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin
+cp whitelist/whitelist-1.so.md5 ${TARGET}/bin
+cp whitelist/whitelist-1.so ${TARGET}/bin
+cp audit/audit-1.so.md5 ${TARGET}/bin
+cp audit/audit-1.so ${TARGET}/bin
 """
 
 def packageBinary() {
@@ -701,8 +701,6 @@ def packageBinary() {
         tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
         curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
         """
-    } else if (PRODUCT == "enterprise-plugin") {
-        println "Do not need to package enterprise-plugin"
     } else {
         sh """
         cd ${TARGET}
