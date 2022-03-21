@@ -117,6 +117,14 @@ buildImgagesh["tidb"] = """
 cp /usr/local/go/lib/time/zoneinfo.zip ./
 rm -rf tidb-server
 cp bin/tidb-server ./
+if [[ -f "bin/whitelist-1.so" ]]; then
+    cp bin/whitelist-1.so ./
+    echo "plugin file existed: whitelist-1.so"
+fi
+if [[ -f "bin/audit-1.so" ]]; then
+    cp bin/audit-1.so ./
+    echo "plugin file existed: audit-1.so"
+fi
 curl -o Dockerfile ${DOCKERFILE}
 docker build  -t ${imagePlaceHolder} .
 """
