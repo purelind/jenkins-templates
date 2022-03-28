@@ -164,12 +164,12 @@ def parseBuildInfo(repo) {
 
     // builds/pingcap/test/tidb/3e1cd2733a8e43670b25e7b2e53001eccac78147/centos7/tidb-linux-arm64.tar.gz
 
-    def binaryAmd64 = "builds/pingcap/${repo}/test/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
-    def binaryArm64 = "builds/pingcap/test/${repo}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
+    def binaryAmd64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64.tar.gz"
+    def binaryArm64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
     def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
     def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
-    def binaryAmd64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-amd64/${repo}.tar.gz"
-    def binaryArm64Failpoint = "builds/pingcap/${repo}/test/failpoint/${GIT_BRANCH}/${sha1}/linux-arm64/${repo}.tar.gz"
+    def binaryAmd64Failpoint = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64-failpoint.tar.gz"
+    def binaryArm64Failpoint = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-arm64-failpoint.tar.gz"
 
     if (repo == "tics") {
         dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
@@ -184,10 +184,10 @@ def parseBuildInfo(repo) {
         // tar package of tidb build by atom-job include these binaries:
         // 
         // example: download/builds/pingcap/br/master/3e1cd2733a8e43670b25e7b2e53001eccac78147/centos7/br.tar.gz
-        binaryAmd64 = "builds/pingcap/br/test/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64.tar.gz"
-        binaryArm64 = "builds/pingcap/br/test/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64.tar.gz"
-        binaryAmd64Failpoint = "builds/pingcap/br/test/failpoint/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64.tar.gz"
-        binaryArm64Failpoint = "builds/pingcap/br/test/failpoint/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64.tar.gz"
+        binaryAmd64 =  "builds/pingcap/qa-daily-image-build/br/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64.tar.gz"
+        binaryArm64 = "builds/pingcap/qa-daily-image-build/br/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64.tar.gz"
+        binaryAmd64Failpoint = "builds/pingcap/qa-daily-image-build/br/${GIT_BRANCH}/${sha1}/centos7/br-linux-amd64-failpoint.tar.gz"
+        binaryArm64Failpoint = "builds/pingcap/qa-daily-image-build/br/${GIT_BRANCH}/${sha1}/centos7/br-linux-arm64-failpoint.tar.gz"
     }
 
     return  [
