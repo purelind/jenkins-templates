@@ -63,6 +63,8 @@ def release_one(repo,arch,failpoint) {
     if (repo == "monitoring") {
         sha1 =  get_sha(actualRepo,RELEASE_BRANCH)
     }
+
+    println "${repo}: ${sha1}"
     def binary = "builds/pingcap/${repo}/test/${RELEASE_TAG}/${sha1}/linux-${arch}/${repo}.tar.gz"
     if (failpoint) {
         binary = "builds/pingcap/${repo}/test/failpoint/${RELEASE_TAG}/${sha1}/linux-${arch}/${repo}.tar.gz"
