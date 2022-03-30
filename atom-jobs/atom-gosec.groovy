@@ -105,7 +105,7 @@ try {
 
                     stage("Gosec check") {
                         sh """
-                        curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b ${ws}/bin v2.9.1
+                        curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b ${ws}/bin v2.11.0
                         """
                         sh """
                         export PATH=${ws}/bin:\$PATH
