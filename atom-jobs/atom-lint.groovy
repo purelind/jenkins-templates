@@ -134,7 +134,7 @@ try {
 
                     stage("Lint check") {
                         sh """
-                        curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b ${ws}/bin v1.42.0
+                        curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b ${ws}/bin v1.45.2
                         """
                         sh """
                         export PATH=${ws}/bin:\$PATH
