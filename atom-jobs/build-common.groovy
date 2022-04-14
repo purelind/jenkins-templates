@@ -387,6 +387,12 @@ cp bin/* ${TARGET}/bin/
 """
 
 // only support dm version >= 5.3.0 (dm in repo tiflow)
+// start from 6.0.0, dm user webui is supported
+dmUseWebUI = "false"
+if ((branch.startsWith("release-") && branch <"release-6.0") || (branch.startsWith("v") && branch <"v6.0.0")) { 
+    dmUseWebUI = "true"
+}
+
 buildsh["dm"] = """
 if [ ${RELEASE_TAG}x != ''x ];then
     for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
@@ -397,8 +403,22 @@ fi;
 if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
+nodePackage="node-v16.14.0-linux-x64"
+if [[ ${ARCH} ]] == 'arm64'; then
+    nodePackage="node-v16.14.0-linux-arm64"
+fi;
 go version
-make dm
+if [ ${dmUseWebUI} == "true" ]; then
+    wget http://fileserver.pingcap.net/download/ee-tools/${nodePackage}.tar.gz
+    tar -xvf ${nodePackage}.tar.gz
+    export PATH=${cwd}/${nodePackage}/bin:\$PATH
+    node -v
+    npm install -g yarn
+    make dm-master-with-webui dm-worker dmctl dm-syncer
+else
+    make dm
+fi;
+
 ls -alh bin/
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin
@@ -409,8 +429,10 @@ mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
 mv dm/dm/master/dm-master.toml ${TARGET}/conf/
 mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
 mv LICENSE ${TARGET}/
-curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
-mv mydumper-latest-linux-amd64/bin/mydumper ${TARGET}/bin/ && rm -rf mydumper-latest-linux-amd64
+if [[ ${ARCH} == "amd64" ]]; then
+    curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
+    mv mydumper-latest-linux-amd64/bin/mydumper ${TARGET}/bin/ && rm -rf mydumper-latest-linux-amd64
+fi;
 """
 
 buildsh["br"] = """
