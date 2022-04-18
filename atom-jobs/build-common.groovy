@@ -389,7 +389,7 @@ cp bin/* ${TARGET}/bin/
 // only support dm version >= 5.3.0 (dm in repo tiflow)
 // start from 6.0.0, dm user webui is supported
 dmUseWebUI = "false"
-if ((branch.startsWith("release-") && branch <"release-6.0") || (branch.startsWith("v") && branch <"v6.0.0")) { 
+if ((RELEASE_TAG.startsWith("release-") && RELEASE_TAG <"release-6.0") || (RELEASE_TAG.startsWith("v") && RELEASE_TAG <"v6.0.0")) { 
     dmUseWebUI = "true"
 }
 
