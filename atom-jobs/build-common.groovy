@@ -389,8 +389,18 @@ cp bin/* ${TARGET}/bin/
 // only support dm version >= 5.3.0 (dm in repo tiflow)
 // start from 6.0.0, dm use webui is supported
 dmUseWebUI = "true"
-if ((RELEASE_TAG.startsWith("release-") && RELEASE_TAG <"release-6.0") || (RELEASE_TAG.startsWith("v") && RELEASE_TAG <"v6.0.0")) { 
+if ((params.RELEASE_TAG.startsWith("release-") && params.RELEASE_TAG <"release-6.0") || (params.RELEASE_TAG.startsWith("v") && params.RELEASE_TAG <"v6.0.0")) { 
     dmUseWebUI = "false"
+}
+dmNodePackage = "node-v16.14.0-linux-x64"
+if (params.OS == "linux" && params.ARCH == "arm64") {
+    dmNodePackage = "node-v16.14.0-linux-arm64"
+} else if (params.OS == "darwin" && params.ARCH == "arm64") {
+    dmNodePackage = "node-v16.14.0-darwin-arm64"
+} else if (params.OS == "darwin" && params.ARCH == "amd64") {
+    dmNodePackage = "node-v16.14.0-darwin-x64"
+} else {
+    dmNodePackage = "node-v16.14.0-linux-x64"
 }
 
 buildsh["dm"] = """
@@ -403,15 +413,12 @@ fi;
 if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
-nodePackage="node-v16.14.0-linux-x64"
-if [[ ${ARCH} ]] == 'arm64'; then
-    nodePackage="node-v16.14.0-linux-arm64"
-fi;
+
 go version
 if [ ${dmUseWebUI} == "true" ]; then
-    wget http://fileserver.pingcap.net/download/ee-tools/${nodePackage}.tar.gz
-    tar -xvf ${nodePackage}.tar.gz
-    export PATH=${cwd}/${nodePackage}/bin:\$PATH
+    wget http://fileserver.pingcap.net/download/ee-tools/${dmNodePackage}.tar.gz
+    tar -xvf ${dmNodePackage}.tar.gz
+    export PATH=\$(pwd)/${dmNodePackage}/bin:\$PATH
     node -v
     npm install -g yarn
     make dm-master-with-webui dm-worker dmctl dm-syncer
