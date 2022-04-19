@@ -195,13 +195,20 @@ def release_one(repo,arch,failpoint) {
 stage ("release") {
     node("${GO_BUILD_SLAVE}") {
         container("golang") {
-            releaseRepos = ["dumpling","br","ticdc","tidb-binlog","tics","tidb","tikv","pd","monitoring","ng-monitoring"]
+            releaseRepos = ["dumpling","br","ticdc","tidb-binlog","tics","tidb","tikv","pd","monitoring"]
             builds = [:]
             for (item in releaseRepos) {
                 def product = "${item}"
                 builds["build ${item} amd64"] = {
                     release_one(product,"amd64",false)
                 }
+            }
+            if (RELEASE_TAG >= "v5.3.0") { 
+                builds["build ng-monitoring amd64"] = {
+                    release_one("ng-monitoring","amd64",false)
+                }
+            } else {
+                println("skip build ng-monitoring because only v5.3.0+ support")
             }
                 
             failpointRepos = ["tidb","pd","tikv"]
