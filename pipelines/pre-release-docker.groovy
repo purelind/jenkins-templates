@@ -164,11 +164,11 @@ def release_one(repo,arch,failpoint) {
     // dm version >= v5.3.0 && < v6.0.0 need build image pingcap/dm-monitor-initializer
     if (repo == "dm" && RELEASE_TAG < "v6.0.0") {
         def dockerfileForDmMonitorInitializer = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/dm-monitor-initializer"
-        def imageNameFoeDmMonitorInitializer = "dm-monitor-initializer"
+        def imageNameForDmMonitorInitializer = "dm-monitor-initializer"
         if (arch == "arm64") {
-            imageNameFoeDmMonitorInitializer = imageNameFoeDmMonitorInitializer + "-arm64"
-            dockerfileForDmMonitorInitializer = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/dm-monitor-initializer-arm64"
+            imageNameForDmMonitorInitializer = imageNameForDmMonitorInitializer + "-arm64"
         }
+        imageNameForDmMonitorInitializer = "hub.pingcap.net/qa/${imageNameForDmMonitorInitializer}:${IMAGE_TAG},pingcap/${imageNameForDmMonitorInitializer}:${IMAGE_TAG}"
         def paramsDockerDmMonitorInitializer = [
             string(name: "ARCH", value: arch),
             string(name: "OS", value: "linux"),
@@ -177,7 +177,7 @@ def release_one(repo,arch,failpoint) {
             string(name: "PRODUCT", value: "dm_monitor_initializer"),
             string(name: "RELEASE_TAG", value: RELEASE_TAG),
             string(name: "DOCKERFILE", value: dockerfileForDmMonitorInitializer),
-            string(name: "RELEASE_DOCKER_IMAGES", value: imageNameFoeDmMonitorInitializer),
+            string(name: "RELEASE_DOCKER_IMAGES", value: imageNameForDmMonitorInitializer),
         ]
         build job: "docker-common",
                 wait: true,
