@@ -444,14 +444,18 @@ if [[ -d "dm/dm/dm-ansible" ]]; then
 fi;
 # start from v6.0.0(include v6.0.0), pingcap/dm-monitor-initializer is replace by pingcap/monitoring
 # link https://github.com/pingcap/monitoring/pull/188.
-if [[ -d "dm/dm-ansible" ]]; then
-    mkdir -p ${TARGET}/monitoring/dashboards
-    mkdir -p ${TARGET}/monitoring/rules
-    cp -f dm/dm-ansible/scripts/DM-Monitor-Professional.json ${TARGET}/monitoring/dashboards/
-    cp -f dm/dm-ansible/scripts/DM-Monitor-Standard.json ${TARGET}/monitoring/dashboards/
-    cp -f dm/dm-ansible/scripts/dm_instances.json ${TARGET}/monitoring/dashboards/
-    cp -f dm/dm-ansible/conf/dm_worker.rules.yml ${TARGET}/monitoring/rules/
+if [[ -d "dm/dm/dm-ansible" ]]; then
+    # mkdir -p ${TARGET}/monitoring/dashboards
+    # mkdir -p ${TARGET}/monitoring/rules
+    cd dm
+    cp -f dm/dm-ansible/scripts/DM-Monitor-Professional.json monitoring/dashboards/
+    cp -f dm/dm-ansible/scripts/DM-Monitor-Standard.json monitoring/dashboards/
+    cp -f dm/dm-ansible/scripts/dm_instances.json monitoring/dashboards/
+    mkdir -p monitoring/rules
+    cp -f dm/dm-ansible/conf/dm_worker.rules.yml monitoring/rules/
     cd monitoring && go run dashboards/dashboard.go && cd ..
+    cd ..
+    mv dm/monitoring ${TARGET}/
 fi;
 
 if [[ ${ARCH} == "amd64" ]]; then
