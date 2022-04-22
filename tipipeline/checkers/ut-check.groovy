@@ -52,10 +52,10 @@ def runBody = {config ->
             python3 agent-ut.py ${config.repo}/${utReport} ${config.repo}/${covReport} ${coverageRate} || true
             if [[ -f test_summary.info ]]; then
                 cat test_summary.info
-            fi else {
-                echo "No test_summary.info"
+            else
+                echo "No test summary"
                 touch test_summary.info
-            }
+            fi;
             
             wget ${FILE_SERVER_URL}/download/rd-index-agent/repo_ut/tiinsight-agent-ut.py
             python3 tiinsight-agent-ut.py ${config.repo} ${config.branch} ${config.commitID} ${config.taskName} ${config.repo}/${covReport} ${config.repo}/${utReport} ${BUILD_URL} || true
