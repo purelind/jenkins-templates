@@ -49,10 +49,10 @@ def runBody = {config ->
         def coverageRate = config.params["coverageRate"]
         sh """
             wget ${FILE_SERVER_URL}/download/rd-atom-agent/atom-ut/agent-ut.py
-            python3 agent-ut.py ${config.repo}/${utReport} ${config.repo}/${covReport} ${coverageRate}
+            python3 agent-ut.py ${config.repo}/${utReport} ${config.repo}/${covReport} ${coverageRate} || true
             
             wget ${FILE_SERVER_URL}/download/rd-index-agent/repo_ut/tiinsight-agent-ut.py
-            python3 tiinsight-agent-ut.py ${config.repo} ${config.branch} ${config.commitID} ${config.taskName} ${config.repo}/${covReport} ${config.repo}/${utReport} ${BUILD_URL}
+            python3 tiinsight-agent-ut.py ${config.repo} ${config.branch} ${config.commitID} ${config.taskName} ${config.repo}/${covReport} ${config.repo}/${utReport} ${BUILD_URL} || true
         """
         ENV_TEST_SUMMARY = sh(script: "cat test_summary.info", returnStdout: true).trim()
         println ENV_TEST_SUMMARY
