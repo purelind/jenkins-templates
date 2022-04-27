@@ -25,6 +25,13 @@ def get_sha(repo) {
 
 def release_one(repo) {
     def sha1 =  get_sha(repo)
+    if (sha1.length() == 40) {
+        println "valid sha1: ${sha1}"
+    } else {
+        println "invalid sha1: ${sha1}"
+        currentBuild.result = "FAILURE"
+        throw new Exception("Invalid sha1: ${sha1}, Throw to stop pipeline")
+    }
     def binary = "builds/pingcap/${repo}/test/${sha1}/linux-arm64/${repo}.tar.gz"
     def paramsBuild = [
         string(name: "ARCH", value: "arm64"),
