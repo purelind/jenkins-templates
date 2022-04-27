@@ -138,7 +138,11 @@ def parseBuildInfo(repo) {
         }
     }
     def sha1 =  get_sha(actualRepo)
-    if (sha1 == "") {
+    if (sha1.length() == 40) {
+        println "valid sha1: ${sha1}"
+    } else {
+        println "invalid sha1: ${sha1}"
+        currentBuild.result = "FAILURE"
         println "ERROR: can not get sha1 for ${repo} ${GIT_BRANCH}"
         throw new Exception("can not get sha1 for ${repo} ${GIT_BRANCH}")
     }
@@ -456,6 +460,13 @@ def release_one_debug(repo) {
 
 def release_master_monitoring() {
     def sha1 = get_sha("monitoring")
+    if (sha1.length() == 40) {
+        println "valid sha1: ${sha1}"
+    } else {
+        println "invalid sha1: ${sha1}"
+        currentBuild.result = "FAILURE"
+        throw new Exception("Invalid sha1: ${sha1}, Throw to stop pipeline")
+    }
     def binary = "builds/pingcap/monitoring/test/master/${sha1}/linux-amd64/monitoring.tar.gz"
     def arch = "amd64"
     def paramsBuild = [
