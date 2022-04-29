@@ -430,7 +430,7 @@ ls -alh bin/
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin
 mkdir -p ${TARGET}/conf  
-cp bin/* ${TARGET}/bin/
+
 mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
 mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
 mv dm/dm/master/dm-master.toml ${TARGET}/conf/
@@ -460,7 +460,8 @@ fi;
 
 if [[ ${ARCH} == "amd64" ]]; then
     curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
-    mv mydumper-latest-linux-amd64/bin/mydumper ${TARGET}/bin/ && rm -rf mydumper-latest-linux-amd64
+    mv mydumper-latest-linux-amd64/bin/mydumper bin/ && rm -rf mydumper-latest-linux-amd64
+    cp bin/* ${TARGET}/bin/
 fi;
 """
 
