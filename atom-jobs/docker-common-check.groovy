@@ -88,6 +88,14 @@ if (PRODUCT == "tics" || PRODUCT == "tiflash") {
 
 // 定义非默认的构建镜像脚本
 buildImgagesh = [:]
+
+buildImgagesh["dm_monitor_initializer"] = """
+cd monitoring/
+mv Dockerfile Dockerfile.bak
+curl -o Dockerfile ${DOCKERFILE}
+docker build  -t ${imagePlaceHolder} .
+"""
+
 buildImgagesh["tics"] = """
 curl -o Dockerfile ${DOCKERFILE}
 if [[ "${RELEASE_TAG}" == "" ]]; then
