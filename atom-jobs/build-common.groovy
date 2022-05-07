@@ -461,8 +461,8 @@ fi;
 if [[ ${ARCH} == "amd64" ]]; then
     curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
     mv mydumper-latest-linux-amd64/bin/mydumper bin/ && rm -rf mydumper-latest-linux-amd64
-    cp bin/* ${TARGET}/bin/
 fi;
+cp bin/* ${TARGET}/bin/
 """
 
 buildsh["br"] = """
