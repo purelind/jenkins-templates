@@ -159,6 +159,10 @@ if ( goVersion == "go1.13" ) {
 def nodeLabel = goBuildPod
 def containerLabel = "golang"
 def binPath = ""
+def useArmPod = false
+if (params.ARCH == "arm64" && params.PRODUCT in ["tidb", "enterprise-plugin"]) {
+    useArmPod = true
+}
 if (params.PRODUCT == "tikv" || params.PRODUCT == "importer") {
     nodeLabel = "build"
     containerLabel = "rust"
@@ -167,7 +171,7 @@ if (params.PRODUCT == "tics") {
     nodeLabel = "build_tiflash"
     containerLabel = "tiflash"
 } 
-if (params.ARCH == "arm64" && params.OS == "linux") {
+if (params.ARCH == "arm64" && params.OS == "linux" && !useArmPod) {
     binPath = "/usr/local/node/bin:/root/.cargo/bin:/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:${GO_BIN_PATH}"
     nodeLabel = "arm"
     containerLabel = ""
@@ -265,10 +269,10 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [ ${EDITION} == 'enterprise' ]; then
+if [ "${EDITION}" = 'enterprise' ]; then
     export TIDB_EDITION=Enterprise
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [ "${OS}" = 'darwin' ]; then
     export PATH=${binPath}
 fi;
 go version
@@ -697,7 +701,7 @@ fi;
 """
 
 buildsh["enterprise-plugin"] = """
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [ "${OS}" == 'darwin' ]; then
     export PATH=${binPath}
 fi;
 go version
@@ -785,12 +789,68 @@ def release(product, label) {
     }
 }
 
+def run_with_arm_go_pod(Closure body) {
+    switch(goVersion) {
+        case "go1.13":
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13-arm64:latest"
+            break
+        case "go1.16":
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16-arm64:latest"
+            break
+        case "go1.18":
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18-arm64:latest"
+            break
+        default:
+            println "invalid go version ${goVersion}"
+            break
+    }
+    def cloud = "kubernetes-arm64"
+    def label = "${JOB_NAME}-${BUILD_NUMBER}"
+    def namespace = "jenkins-cd"
+    def jnlp_docker_image = "hub.pingcap.net/jenkins/jnlp-slave-arm64:latest"
+    podTemplate(label: label,
+            cloud: cloud,
+            namespace: namespace,
+            containers: [
+                    containerTemplate(
+                            name: 'golang', alwaysPullImage: false,
+                            image: "${arm_go_pod_image}", ttyEnabled: true,
+                            resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
+                            command: '/bin/sh -c', args: 'cat',
+                            envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
+                            
+                    ),
+                    containerTemplate(
+                        name: 'jnlp', image: jnlp_docker_image, alwaysPullImage: false,
+                        resourceRequestCpu: '100m', resourceRequestMemory: '256Mi',
+                    )
+            ],
+            volumes: [
+                    emptyDirVolume(mountPath: '/tmp', memory: false),
+                    emptyDirVolume(mountPath: '/home/jenkins', memory: false)
+                    ],
+    ) {
+        node(label) {
+            println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
+            body()
+        }
+    }
+}
 
 stage("Build ${PRODUCT}") {
-    node(nodeLabel) {
-        dir("go/src/github.com/pingcap/${PRODUCT}") {
-            deleteDir()
-            release(PRODUCT, containerLabel)
+    if (params.PRODUCT in ["tidb", "enterprise-plugin"] || params.ARCH == "arm64") {
+        run_with_arm_go_pod{
+            dir("go/src/github.com/pingcap/${PRODUCT}") {
+                deleteDir()
+                release(PRODUCT, containerLabel)
+            }
+        }
+    } else {
+        node(nodeLabel) {
+            dir("go/src/github.com/pingcap/${PRODUCT}") {
+                deleteDir()
+                release(PRODUCT, containerLabel)
+            }
         }
     }
 }
