@@ -838,7 +838,7 @@ def run_with_arm_go_pod(Closure body) {
 }
 
 stage("Build ${PRODUCT}") {
-    if (params.PRODUCT in ["tidb", "enterprise-plugin"] || params.ARCH == "arm64") {
+    if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64") {
         run_with_arm_go_pod{
             dir("go/src/github.com/pingcap/${PRODUCT}") {
                 deleteDir()
