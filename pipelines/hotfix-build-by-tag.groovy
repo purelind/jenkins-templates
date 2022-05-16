@@ -26,19 +26,41 @@ notify to feishu
 properties([
         parameters([
                 string(
-                        defaultValue: 'tiflow',
+                        defaultValue: '',
                         name: 'REPO',
-                        trim: true
+                        trim: true,
+                        description: 'repo name, example tidb / tiflow / pd / tikv / tiflash',
                 ),
                 string(
-                        defaultValue: 'v5.1.1-20211227',
+                        defaultValue: '',
+                        name: 'PRODUCT',
+                        trim: true,
+                        description: 'product name, example tidb / cdc / dm / br / lightning / dumpling / tiflash ',
+                ),
+                string(
+                        defaultValue: '',
                         name: 'HOTFIX_TAG',
-                        trim: true
+                        trim: true,
+                        description: 'hotfix tag, example v5.1.1-20211227',
                 ),
                 booleanParam(
                         defaultValue: true,
                         name: 'FORCE_REBUILD'
                 ),
+                booleanParam(
+                        defaultValue: false,
+                        name: 'DEBUG'
+                ),
+                choice(
+                    name: 'EDITION',
+                    choices: ['community', 'enterprise'],
+                    description: 'Passing community or enterprise',
+                ),
+                choice(
+                    name: 'ARCH',
+                    choices: ['amd64', 'arm64', "both"],
+                    description: 'build linux amd64 or arm64 or both',
+                )
     ])
 ])
 
@@ -47,8 +69,10 @@ buildPathMap = [
     "tidb": 'go/src/github.com/pingcap/tidb',
     "tiflow": 'go/src/github.com/pingcap/tiflow',
     "pd": 'go/src/github.com/tikv/pd',
-    "tikv": 'tikv',
-
+    "tikv": 'go/src/github.com/tikv/tikv',
+    "tiflash": 'src/github.com/pingcap/tiflash',
+    "tics": 'src/github.com/pingcap/tics',
+    "tidb-binlog": "go/src/github.com/pingcap/tidb-binlog",
 ]
 
 repoUrlMap = [
@@ -56,6 +80,9 @@ repoUrlMap = [
     "tiflow": "git@github.com:pingcap/tiflow.git",
     "pd": "git@github.com:tikv/pd.git",
     "tikv": "git@github.com:tikv/tikv.git",
+    "tiflash": "git@github.com:pingcap/tiflash.git",
+    "tics": "git@github.com:pingcap/tiflash.git",
+    "tidb-binlog": "git@github.com:pingcap/tidb-binlog.git"
 ]
 
 tiupPatchBinaryMap = [
@@ -64,12 +91,21 @@ tiupPatchBinaryMap = [
     "ticdc": "cdc",
     "dm": "dm-master,dm-worker,dmctl",
     "pd": "pd-server",
+    "tiflash": "",
+    "tics": "",
+    "tidb-binlog": "arbiter,pump,drainer,reparo,binlogctl",
 ]
 
 
 
 GIT_HASH = ""
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
+if (params.DEBUG) {
+    println "DEBUG mode"
+    HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+} else {
+    println "NOT DEBUG mode"
+}
 
 HOTFIX_BUILD_RESULT_FILE = "hotfix_build_result-${REPO}-${HOTFIX_TAG}.json"
 HOTFIX_BUILD_RESULT = [:]
@@ -77,10 +113,29 @@ HOTFIX_BUILD_RESULT["repo"] = REPO
 
 buildMap = [:]
 
+
+def get_sha() {
+    sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
+    return sh(returnStdout: true, script: "python gethash.py -repo=${REPO} -version=${HOTFIX_TAG}").trim()
+}
+
+def debugEnv() {
+    stage("debug env") {
+        echo("env")
+        echo("REPO: ${REPO}")
+        echo("PRODUCT: ${PRODUCT}")
+        echo("HOTFIX_TAG: ${HOTFIX_TAG}")
+        echo("FORCE_REBUILD: ${FORCE_REBUILD}")
+        echo("EDITION: ${EDITION}")
+        echo("HARBOR_PROJECT_PREFIX: ${HARBOR_PROJECT_PREFIX}")
+    }
+}
+
+
 // tag example : v5.3.1-20210221
 def selectImageGoVersion(repo, tag) {
     def originalTag = tag.substring(1)
-    if (repo in ["tidb", "pd", "tiflow"]) {
+    if (repo in ["tidb", "pd", "tiflow", "tidb-binlog"]) {
        println "selectImageGoVersion: " + repo + " " + originalTag
        if (originalTag >= "v5.2.0") {
            println "repo ${repo} with tag ${originalTag} is use go1.16"
@@ -115,7 +170,7 @@ def run_with_pod(Closure body) {
     podTemplate(label: label,
             cloud: cloud,
             namespace: namespace,
-            idleMinutes: 10,
+            idleMinutes: 0,
             containers: [
                     containerTemplate(
                             name: 'golang', alwaysPullImage: true,
@@ -152,7 +207,7 @@ def run_with_lightweight_pod(Closure body) {
                     containerTemplate(
                             name: 'golang', alwaysPullImage: true,
                             image: "${pod_go_docker_image}", ttyEnabled: true,
-                            resourceRequestCpu: '200m', resourceRequestMemory: '1Gi',
+                            resourceRequestCpu: '1000m', resourceRequestMemory: '1Gi',
                             command: '/bin/sh -c', args: 'cat',
                             envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
                             
@@ -176,7 +231,7 @@ def checkOutCode(repo, tag) {
         def refspec = "+refs/tags/${tag}:refs/tags/${tag}"
         def repoUrl = repoUrlMap[repo]
         dir(buildPath){
-            def repoDailyCache = "/nfs/cache/git/src-${REPO}.tar.gz"
+            def repoDailyCache = "/home/jenkins/agent/ci-cached-code-daily/src-${REPO}.tar.gz"
             if (fileExists(repoDailyCache)) {
                 println "get code from nfs to reduce clone time"
                 sh """
@@ -219,18 +274,25 @@ def checkOutCode(repo, tag) {
             }
             def githHash = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
             GIT_HASH = githHash
+            if (GIT_HASH.length() == 40) {
+                println "valid commit hash: ${GIT_HASH}"
+            } else {
+                println "invalid commit hash: ${GIT_HASH}"
+                currentBuild.result = "FAILURE"
+                throw new Exception("invalid commit hash: ${GIT_HASH}, Throw to stop pipeline")
+            }
             println "checkout code ${repo} ${tag} ${githHash}"
         }
     }
 }
 
+
 def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     if (packageName in ["tikv", "tidb", "pd", "ticdc"]) {
-        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-amd64"] = patchFile
+        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-amd64"] = "${FILE_SERVER_URL}/download/${patchFile}"  
         println "build tiup patch for ${packageName}"
         run_with_lightweight_pod {
             container("golang") {
-                deleteDir()
                 def patchBinary = tiupPatchBinaryMap[packageName]
                 println "build ${packageName} tiup patch: ${patchBinary} ${patchFile}"
 
@@ -252,16 +314,20 @@ def buildTiupPatch(originalFile, packageName, patchFile, arch) {
 def buildOne(repo, product, hash, arch, binary, tag) {
     println "build binary ${repo} ${product} ${hash} ${arch}"
     println "binary: ${binary}"
+    needSourceCode = false
+    if (product in ["tidb", "tikv", "pd"]) {
+        needSourceCode = true
+    }
     def paramsBuild = [
         string(name: "ARCH", value: arch),
         string(name: "OS", value: "linux"),
-        string(name: "EDITION", value: "community"),
+        string(name: "EDITION", value: EDITION),
         string(name: "OUTPUT_BINARY", value: binary),
         string(name: "REPO", value: repo),
         string(name: "PRODUCT", value: product),
         string(name: "GIT_HASH", value: hash),
         string(name: "RELEASE_TAG", value: tag),
-        [$class: 'BooleanParameterValue', name: 'NEED_SOURCE_CODE', value: true],
+        [$class: 'BooleanParameterValue', name: 'NEED_SOURCE_CODE', value: needSourceCode],
         [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
     ]
     build job: "build-common",
@@ -269,13 +335,19 @@ def buildOne(repo, product, hash, arch, binary, tag) {
             parameters: paramsBuild
 
     def originalFilePath = "${FILE_SERVER_URL}/download/${binary}"
-    def patchFilePath = "${FILE_SERVER_URL}/download/builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
+    def patchFilePath = "builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
+    if (params.DEBUG) {
+          patchFilePath = "builds/hotfix-debug/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"  
+    }
     buildTiupPatch("${FILE_SERVER_URL}/download/${binary}", product, patchFilePath, arch)
     
 
     def hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}:${tag}"
     if (arch == "arm64") {
         hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}-arm64:${tag}"
+    }
+    if (params.DEBUG) {
+        hotfixImageName = "${hotfixImageName}-debug"
     }
     HOTFIX_BUILD_RESULT["results"][product]["image"] = hotfixImageName
     println "build hotfix image ${hotfixImageName}"
@@ -296,170 +368,62 @@ def buildOne(repo, product, hash, arch, binary, tag) {
 }
 
 
-def buildBinaryByTag(repo, tag) {
-    if (repo == "tidb") {
-        println "HOTFIX_BUILD_RESULT=${HOTFIX_BUILD_RESULT}"
-        HOTFIX_BUILD_RESULT["repo"] = "tidb"
-        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
-        HOTFIX_BUILD_RESULT["results"] = [:]
-        println "HOTFIX_BUILD_RESULT=${HOTFIX_BUILD_RESULT}"
-        def builds = [:]
-        def needBuildBr = false
-        def needBuildDumpling = false
-        if (tag >= "v5.2.0") {
-            needBuildBr = true
-        }
-        if (tag >= "v5.3.0") {
-            needBuildDumpling = true
-        }
-        if (needBuildBr) {
-            def brAmd64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-amd64.tar.gz"
-            def brArm64Binary = "builds/hotfix/br/${tag}/${GIT_HASH}/centos7/br-linux-arm64.tar.gz"
-            HOTFIX_BUILD_RESULT["results"]["br"] = [
-                "amd64": "${FILE_SERVER_URL}/download/${brAmd64Binary}",
-                "arm64": "${FILE_SERVER_URL}/download/${brArm64Binary}",
+def buildByTag(repo, tag, packageName) {
+    HOTFIX_BUILD_RESULT["repo"] = repo
+    HOTFIX_BUILD_RESULT["tag"] = tag
+    HOTFIX_BUILD_RESULT["results"] = [:]
+    def builds = [:]
+    def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
+    def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
+    if (params.DEBUG) {
+        amd64Binary = "builds/hotfix-debug/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
+        arm64Binary = "builds/hotfix-debug/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
+    }
+    switch(ARCH) {
+        case "amd64":
+            HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+                "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
             ]
-            builds["br-amd64"] = {
-                buildOne(repo, "br", GIT_HASH, "amd64", brAmd64Binary, tag)
+            builds["${packageName}-${ARCH}"] = { 
+                buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
             }
-            builds["br-arm64"] = {
-                buildOne(repo, "br", GIT_HASH, "arm64", brArm64Binary, tag)
-            }
-        }
-        if (needBuildDumpling) {
-            def dumplingAmd64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-amd64.tar.gz"
-            def dumplingArm64Binary = "builds/hotfix/dumpling/${tag}/${GIT_HASH}/centos7/dumpling-linux-arm64.tar.gz"
-            HOTFIX_BUILD_RESULT["results"]["dumpling"] = [
-                "amd64": "${FILE_SERVER_URL}/download/${dumplingAmd64Binary}",
-                "arm64": "${FILE_SERVER_URL}/download/${dumplingArm64Binary}",
+            break
+        case "arm64":
+            HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+                "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
             ]
-            builds["dumpling-amd64"] = {
-                buildOne(repo, "dumpling", GIT_HASH, "amd64", dumplingAmd64Binary, tag) 
+            builds["${packageName}-${ARCH}"] = {  
+                buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
             }
-            builds["dumpling-arm64"] = {
-                buildOne(repo, "dumpling", GIT_HASH, "arm64", dumplingArm64Binary, tag)
+            break
+        case "both":
+            HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
+                "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
+                "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
+            ]
+            builds["${packageName}-amd64"] = {  
+                buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
             }
-        }
-        def tidbAmd64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-amd64.tar.gz"
-        def tidbArm64Binary = "builds/hotfix/tidb/${tag}/${GIT_HASH}/centos7/tidb-linux-arm64.tar.gz"
-        HOTFIX_BUILD_RESULT["results"]["tidb"] = [
-            "amd64": "${FILE_SERVER_URL}/download/${tidbAmd64Binary}",
-            "arm64": "${FILE_SERVER_URL}/download/${tidbArm64Binary}",
-        ]
-        builds["tidb-amd64"] = {
-            buildOne(repo, "tidb", GIT_HASH, "amd64", tidbAmd64Binary, tag)
-        }
-        builds["tidb-arm64"] = {
-            buildOne(repo, "tidb", GIT_HASH, "arm64", tidbArm64Binary, tag)
-        }
-
-        parallel builds
-
-        println "build hotfix success"
-        println "build result: ${HOTFIX_BUILD_RESULT}"
-        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
-        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
-        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
-        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
-        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
+            builds["${packageName}-arm64"] = {  
+                buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
+            }
+            break
+        default:
+            println "unknown arch ${ARCH}"
+            throw new Exception("unknown arch ${ARCH}")
+        break
     }
-    if (repo == "pd") {
-        HOTFIX_BUILD_RESULT["repo"] = "pd"
-        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
-        HOTFIX_BUILD_RESULT["results"] = [:]
-        def packageName = "pd"
-        def builds = [:]
-        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
-        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
-        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
-            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
-            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
-        ]
-        builds["${packageName}-amd64"] = {
-            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
-        }
-        builds["${packageName}-arm64"] = {
-            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
-        }
+    parallel builds
 
-        parallel builds
+    println "build hotfix success"
+    println "build result: ${HOTFIX_BUILD_RESULT}"
+    HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
+    HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
+    def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+    writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+    archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
 
-        println "build hotfix success"
-        println "build result: ${HOTFIX_BUILD_RESULT}"
-        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
-        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
-        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
-        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
-        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
-    }
-
-    if (repo == "tikv") {
-        HOTFIX_BUILD_RESULT["repo"] = "tikv"
-        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
-        HOTFIX_BUILD_RESULT["results"] = [:]
-        def packageName = "tikv"
-        def builds = [:]
-        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
-        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
-        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
-            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
-            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
-        ]
-        builds["${packageName}-amd64"] = {
-            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
-        }
-        builds["${packageName}-arm64"] = {
-            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
-        }
-
-        parallel builds
-
-        println "build hotfix success"
-        println "build result: ${HOTFIX_BUILD_RESULT}"
-        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
-        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
-        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
-        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
-        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
-    }
-
-    if (repo == "tiflow") {
-        def packageName = "ticdc"
-        HOTFIX_BUILD_RESULT["repo"] = "tiflow"
-        HOTFIX_BUILD_RESULT["tag"] = "${tag}"
-        HOTFIX_BUILD_RESULT["results"] = [:]
-        // TODO build-common and docker-common support dm (repo tiflow version >= v5.3.0)
-        // def needBuildDm = false
-        // build dm binary
-        // build dm docker image
-
-        // default build ticdc binary and image
-        def builds = [:]
-        def amd64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-amd64.tar.gz"
-        def arm64Binary = "builds/hotfix/${packageName}/${tag}/${GIT_HASH}/centos7/${packageName}-linux-arm64.tar.gz"
-        HOTFIX_BUILD_RESULT["results"]["${packageName}"] = [
-            "amd64": "${FILE_SERVER_URL}/download/${amd64Binary}",
-            "arm64": "${FILE_SERVER_URL}/download/${arm64Binary}",
-        ]
-        builds["${packageName}-amd64"] = {
-            buildOne(repo, packageName, GIT_HASH, "amd64", amd64Binary, tag)
-        }
-        builds["${packageName}-arm64"] = {
-            buildOne(repo, packageName, GIT_HASH, "arm64", arm64Binary, tag)
-        }
-
-        parallel builds
-
-        println "build hotfix success"
-        println "build result: ${HOTFIX_BUILD_RESULT}"
-        HOTFIX_BUILD_RESULT["ci_url"] = "${RUN_DISPLAY_URL}"
-        HOTFIX_BUILD_RESULT["commit_id"] = "${GIT_HASH}"
-        def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
-        writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
-        archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
-    }
-
-    currentBuild.description = "hotfix build ${repo} ${tag}"
+    currentBuild.description = "hotfix build ${repo} ${tag} ${GIT_HASH}"
     // currentBuild.description += "\n"
 }
 
@@ -479,14 +443,24 @@ def notifyToFeishu(buildResultFile) {
 run_with_pod {
     container("golang") {
         stage("hotfix-${REPO}") {
+            // TODO enable valid hotfix tag
             if (!validHotfixTag(HOTFIX_TAG)) {
                 println "invalid hotfix tag ${HOTFIX_TAG}"
-                exit 1
+                throw new Exception("invalid hotfix tag ${HOTFIX_TAG}")
             }
             def ws = pwd()
             dir("${REPO}") {
-                checkOutCode(REPO, HOTFIX_TAG)
-                buildBinaryByTag(REPO, HOTFIX_TAG)
+                // checkOutCode(REPO, HOTFIX_TAG)
+                GIT_HASH = get_sha()
+                if (GIT_HASH.length() == 40) {
+                    println "valid commit hash: ${GIT_HASH}"
+                } else {
+                    println "invalid commit hash: ${GIT_HASH}"
+                    currentBuild.result = "FAILURE"
+                    throw new Exception("invalid commit hash: ${GIT_HASH}, Throw to stop pipeline")
+                }
+                println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
+                buildByTag(REPO, HOTFIX_TAG, PRODUCT)
 
                 notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
             }
