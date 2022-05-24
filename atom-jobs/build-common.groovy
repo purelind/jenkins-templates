@@ -160,6 +160,9 @@ def nodeLabel = goBuildPod
 def containerLabel = "golang"
 def binPath = ""
 def useArmPod = false
+if (param.ARCH == "arm64") {
+    GO_BIN_PATH = "/usr/local/go1.18.2rc1 /bin"
+}
 if (params.ARCH == "arm64" && params.PRODUCT in ["tidb", "enterprise-plugin"]) {
     useArmPod = true
 }
