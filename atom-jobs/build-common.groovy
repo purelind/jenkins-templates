@@ -445,9 +445,19 @@ mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
 mv LICENSE ${TARGET}/
 
 # start from v6.0.0(include v6.0.0), dm-ansible is removed, link https://github.com/pingcap/tiflow/pull/4917
+# dm-master and dm-worker tiup package also need those config file even for version >=6.0.0
+#  1. dm-master/conf/dm_worker.rules.yml
+#  2. dm-master/scripts/DM-Monitor-Professional.json
+#  3. dm-master/scripts/DM-Monitor-Standard.json
 if [[ -d "dm/dm/dm-ansible" ]]; then
     mkdir -p ${TARGET}/dm-ansible
     cp -r dm/dm/dm-ansible/* ${TARGET}/dm-ansible/
+else
+    mkdir -p ${TARGET}/dm-ansible
+    mkdir -p ${TARGET}/dm-ansible/conf
+    mkdir -p ${TARGET}/dm-ansible/scripts
+    cp -r dm/metrics/alertmanager/dm_worker.rules.yml ${TARGET}/dm-ansible/conf
+    cp -r dm/metrics/grafana/* ${TARGET}/dm-ansible/scripts
 fi;
 # start from v6.0.0(include v6.0.0), pingcap/dm-monitor-initializer is replace by pingcap/monitoring
 # link https://github.com/pingcap/monitoring/pull/188.
