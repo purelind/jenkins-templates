@@ -54,8 +54,8 @@ if (repoInfo.length == 2) {
 
 def run_with_pod(Closure body) {
     def label = "cache-code-atom-job-${BUILD_NUMBER}"
-    def cloud = "kubernetes"
-    def namespace = "jenkins-tidb"
+    def cloud = "kubernetes-ng"
+    def namespace = "jenkins-ti-pipeline"
     def pod_go_docker_image = "hub.pingcap.net/jenkins/centos7_golang-1.16:latest"
     def jnlp_docker_image = "jenkins/inbound-agent:4.3-4"
     podTemplate(label: label,
