@@ -347,8 +347,8 @@ def updateTaskStatus(TaskSpec config) {
 
 def runWithPod(TaskSpec config, Closure body) {
     def label = config.repo + "-" + config.pipelineName + "-" + UUID.randomUUID().toString()
-    def cloud = "kubernetes"
-    def namespace = "jenkins-tidb"
+    def cloud = "kubernetes-ng"
+    def namespace = "jenkins-ti-pipeline"
     def jnlp_docker_image = "jenkins/inbound-agent:4.3-4"
     podTemplate(label: label,
             cloud: cloud,
