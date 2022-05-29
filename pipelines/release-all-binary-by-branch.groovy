@@ -52,7 +52,7 @@ def release_one(repo) {
 
 def run_with_pod(Closure body) {
     def label = "${JOB_NAME}-${BUILD_NUMBER}"
-    def cloud = "kubernetes-ng"
+    def cloud = "kubernetes"
     def namespace = "jenkins-cd"
     podTemplate(label: label,
             cloud: cloud,
