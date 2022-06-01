@@ -29,13 +29,13 @@ properties([
                         defaultValue: '',
                         name: 'REPO',
                         trim: true,
-                        description: 'repo name, example tidb / tiflow / pd / tikv / tiflash',
+                        description: 'repo name, example tidb / tiflow / pd / tikv / tiflash / tidb-binlog',
                 ),
                 string(
                         defaultValue: '',
                         name: 'PRODUCT',
                         trim: true,
-                        description: 'product name, example tidb / cdc / dm / br / lightning / dumpling / tiflash ',
+                        description: 'product name, example tidb / ticdc / dm / br / lightning / dumpling / tiflash / tidb-binlog',
                 ),
                 string(
                         defaultValue: '',
@@ -71,6 +71,7 @@ buildPathMap = [
     "pd": 'go/src/github.com/tikv/pd',
     "tikv": 'go/src/github.com/tikv/tikv',
     "tiflash": 'src/github.com/pingcap/tiflash',
+    "tidb-binlog": 'go/src/github.com/pingcap/tidb-binlog',
 ]
 
 repoUrlMap = [
@@ -79,6 +80,7 @@ repoUrlMap = [
     "pd": "git@github.com:tikv/pd.git",
     "tikv": "git@github.com:tikv/tikv.git",
     "tiflash": "git@github.com:pingcap/tiflash.git",
+    "tidb-binlog": "git@github.com:pingcap/tidb-binlog.git"
 ]
 
 tiupPatchBinaryMap = [
@@ -88,6 +90,7 @@ tiupPatchBinaryMap = [
     "dm": "dm-master,dm-worker,dmctl",
     "pd": "pd-server",
     "tiflash": "",
+    "tidb-binlog": "pump,drainer,reparo,binlogctl"
 ]
 
 
@@ -342,9 +345,9 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     buildTiupPatch("${FILE_SERVER_URL}/download/${binary}", product, patchFilePath, arch)
     
 
-    def hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}:${tag}"
+    def hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${product}:${tag}"
     if (arch == "arm64") {
-        hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${repo}-arm64:${tag}"
+        hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${product}-arm64:${tag}"
     }
     if (params.DEBUG) {
         hotfixImageName = "${hotfixImageName}-debug"
