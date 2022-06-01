@@ -71,8 +71,6 @@ buildPathMap = [
     "pd": 'go/src/github.com/tikv/pd',
     "tikv": 'go/src/github.com/tikv/tikv',
     "tiflash": 'src/github.com/pingcap/tiflash',
-    "tics": 'src/github.com/pingcap/tics',
-
 ]
 
 repoUrlMap = [
@@ -81,7 +79,6 @@ repoUrlMap = [
     "pd": "git@github.com:tikv/pd.git",
     "tikv": "git@github.com:tikv/tikv.git",
     "tiflash": "git@github.com:pingcap/tiflash.git",
-    "tics": "git@github.com:pingcap/tiflash.git",
 ]
 
 tiupPatchBinaryMap = [
@@ -91,7 +88,6 @@ tiupPatchBinaryMap = [
     "dm": "dm-master,dm-worker,dmctl",
     "pd": "pd-server",
     "tiflash": "",
-    "tics": "",
 ]
 
 
