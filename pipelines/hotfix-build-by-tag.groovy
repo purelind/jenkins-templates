@@ -99,7 +99,7 @@ GIT_HASH = ""
 HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
 if (params.DEBUG) {
     println "DEBUG mode"
-    HARBOR_PROJECT_PREFIX = "hub.pingcap.net/wulifu"
+    HARBOR_PROJECT_PREFIX = "hub.pingcap.net/ee-debug"
 } else {
     println "NOT DEBUG mode"
 }
