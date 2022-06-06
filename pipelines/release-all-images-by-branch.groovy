@@ -593,17 +593,17 @@ def run_with_pod(Closure body) {
             idleMinutes: 0,
             containers: [
                     containerTemplate(
-                        name: 'golang', alwaysPullImage: true,
-                        image: "hub.pingcap.net/jenkins/centos7_golang-1.18:latest", ttyEnabled: true,
-                        resourceRequestCpu: '200m', resourceRequestMemory: '1Gi',
-                        command: '/bin/sh -c', args: 'cat',
-                        envVars: [containerEnvVar(key: 'GOPATH', value: '/go')]     
+                            name: 'golang', alwaysPullImage: true,
+                            image: "hub.pingcap.net/jenkins/centos7_golang-1.18:latest", ttyEnabled: true,
+                            resourceRequestCpu: '200m', resourceRequestMemory: '1Gi',
+                            command: '/bin/sh -c', args: 'cat',
+                            envVars: [containerEnvVar(key: 'GOPATH', value: '/go')]
                     )
             ],
             volumes: [
                     emptyDirVolume(mountPath: '/tmp', memory: false),
                     emptyDirVolume(mountPath: '/home/jenkins', memory: false)
-                    ],
+            ],
     ) {
         node(label) {
             println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
@@ -625,8 +625,10 @@ retry(2) {
                 releaseRepos = ["tics"]
                 for (item in releaseRepos) {
                     def String product = "${item}"
-                    builds["${item}-build"] = {
-                        release_one_normal(product)
+                    retry(2) {
+                        builds["${item}-build"] = {
+                            release_one_normal(product)
+                        }
                     }
                 }
                 releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog"]
@@ -639,18 +641,22 @@ retry(2) {
                     if (params.NEED_MULTIARCH == "false") {
                         stageName = "${product}"
                     }
-                    builds[stageName] = {
-                        release_one_normal(product)
-                        if (product != "ng-monitoring") {
-                            release_one_debug(product)
+                    retry(2) {
+                        builds[stageName] = {
+                            release_one_normal(product)
+                            if (product != "ng-monitoring") {
+                                release_one_debug(product)
+                            }
                         }
                     }
                 }
                 failpointRepos = ["tidb", "pd", "tikv", "br", "tidb-lightning"]
                 for (item_failpoint in failpointRepos) {
                     def String product_failpoint = "${item_failpoint}"
-                    builds["${item_failpoint}-failpoint"] = {
-                        release_one_enable_failpoint(product_failpoint)
+                    retry(2) {
+                        builds["${item_failpoint}-failpoint"] = {
+                            release_one_enable_failpoint(product_failpoint)
+                        }
                     }
                 }
                 parallel builds
