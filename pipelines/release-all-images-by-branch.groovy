@@ -612,69 +612,70 @@ def run_with_pod(Closure body) {
     }
 }
 
-retry(2) {
-    try {
-        run_with_pod {
-            container("golang") {
-                builds = [:]
-                if ("${GIT_BRANCH}" == "master") {
-                    builds["monitoring"] = {
+try {
+    run_with_pod {
+        container("golang") {
+            builds = [:]
+            if ("${GIT_BRANCH}" == "master") {
+                builds["monitoring"] = {
+                    retry(2) {
                         release_master_monitoring()
                     }
                 }
-                releaseRepos = ["tics"]
-                for (item in releaseRepos) {
-                    def String product = "${item}"
-                    retry(2) {
-                        builds["${item}-build"] = {
-                            release_one_normal(product)
-                        }
-                    }
-                }
-                releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog"]
-                if ("${GIT_BRANCH}" >= "release-5.3" || "${GIT_BRANCH}" == "master") {
-                    releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm", "ng-monitoring"]
-                }
-                for (item in releaseReposMultiArch) {
-                    def String product = "${item}"
-                    def String stageName = "${product}-multi-arch"
-                    if (params.NEED_MULTIARCH == "false") {
-                        stageName = "${product}"
-                    }
-                    retry(2) {
-                        builds[stageName] = {
-                            release_one_normal(product)
-                            if (product != "ng-monitoring") {
-                                release_one_debug(product)
-                            }
-                        }
-                    }
-                }
-                failpointRepos = ["tidb", "pd", "tikv", "br", "tidb-lightning"]
-                for (item_failpoint in failpointRepos) {
-                    def String product_failpoint = "${item_failpoint}"
-                    retry(2) {
-                        builds["${item_failpoint}-failpoint"] = {
-                            release_one_enable_failpoint(product_failpoint)
-                        }
-                    }
-                }
-                parallel builds
             }
-            currentBuild.result = "SUCCESS"
+            releaseRepos = ["tics"]
+            for (item in releaseRepos) {
+                def String product = "${item}"
+                builds["${item}-build"] = {
+                    retry(2) {
+                        release_one_normal(product)
+                    }
+                }
+            }
+            releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog"]
+            if ("${GIT_BRANCH}" >= "release-5.3" || "${GIT_BRANCH}" == "master") {
+                releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm", "ng-monitoring"]
+            }
+            for (item in releaseReposMultiArch) {
+                def String product = "${item}"
+                def String stageName = "${product}-multi-arch"
+                if (params.NEED_MULTIARCH == "false") {
+                    stageName = "${product}"
+                }
+                builds[stageName] = {
+                    retry(2) {
+                        release_one_normal(product)
+                        if (product != "ng-monitoring") {
+                            release_one_debug(product)
+                        }
+                    }
+                }
+            }
+            failpointRepos = ["tidb", "pd", "tikv", "br", "tidb-lightning"]
+            for (item_failpoint in failpointRepos) {
+                def String product_failpoint = "${item_failpoint}"
+                builds["${item_failpoint}-failpoint"] = {
+                    retry(2) {
+                        release_one_enable_failpoint(product_failpoint)
+                    }
+                }
+            }
+            parallel builds
         }
-    } catch (Exception e) {
-        currentBuild.result = "FAILURE"
-    } finally {
-        build job: 'send_notify',
-                wait: true,
-                parameters: [
-                        [$class: 'StringParameterValue', name: 'RESULT_JOB_NAME', value: "${JOB_NAME}"],
-                        [$class: 'StringParameterValue', name: 'RESULT_BUILD_RESULT', value: currentBuild.result],
-                        [$class: 'StringParameterValue', name: 'RESULT_BUILD_NUMBER', value: "${BUILD_NUMBER}"],
-                        [$class: 'StringParameterValue', name: 'RESULT_RUN_DISPLAY_URL', value: "${RUN_DISPLAY_URL}"],
-                        [$class: 'StringParameterValue', name: 'RESULT_TASK_START_TS', value: "${taskStartTimeInMillis}"],
-                        [$class: 'StringParameterValue', name: 'SEND_TYPE', value: "FAILURE"]
-                ]
+        currentBuild.result = "SUCCESS"
     }
+} catch (Exception e) {
+    currentBuild.result = "FAILURE"
+} finally {
+    build job: 'send_notify',
+            wait: true,
+            parameters: [
+                    [$class: 'StringParameterValue', name: 'RESULT_JOB_NAME', value: "${JOB_NAME}"],
+                    [$class: 'StringParameterValue', name: 'RESULT_BUILD_RESULT', value: currentBuild.result],
+                    [$class: 'StringParameterValue', name: 'RESULT_BUILD_NUMBER', value: "${BUILD_NUMBER}"],
+                    [$class: 'StringParameterValue', name: 'RESULT_RUN_DISPLAY_URL', value: "${RUN_DISPLAY_URL}"],
+                    [$class: 'StringParameterValue', name: 'RESULT_TASK_START_TS', value: "${taskStartTimeInMillis}"],
+                    [$class: 'StringParameterValue', name: 'SEND_TYPE', value: "FAILURE"]
+            ]
 }
+
