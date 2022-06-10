@@ -75,7 +75,7 @@ class PipelineSpec {
     TaskSpec[] tasks;
 }
 
-PIPELINE_RUN_API_ENDPOINT = "http://172.16.5.13:30792/pipelinerun"
+PIPELINE_RUN_API_ENDPOINT = "http://172.16.4.15:30792/pipelinerun"
 
 def loadPipelineConfig(fileURL, pullRequestAuthor, triggerAuthor) {
     ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory())
@@ -342,7 +342,7 @@ def defaultResourceValue(Resources resource) {
 
 def updateTaskStatus(TaskSpec config) {
     // update taskrun to tipipeline by task_id
-    response = httpRequest consoleLogResponseBody: true, contentType: 'APPLICATION_JSON', httpMode: 'PUT', requestBody: new JsonBuilder(config).toPrettyString(), url: "http://172.16.5.13:30792/taskrun", validResponseCodes: '200'
+    response = httpRequest consoleLogResponseBody: true, contentType: 'APPLICATION_JSON', httpMode: 'PUT', requestBody: new JsonBuilder(config).toPrettyString(), url: "http://172.16.4.15:30792/taskrun", validResponseCodes: '200'
 }
 
 def runWithPod(TaskSpec config, Closure body) {
