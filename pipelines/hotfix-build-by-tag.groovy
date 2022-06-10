@@ -44,6 +44,10 @@ properties([
                         description: 'hotfix tag, example v5.1.1-20211227',
                 ),
                 booleanParam(
+                        defaultValue: false,
+                        name: 'PUSH_GCR'
+                ),
+                booleanParam(
                         defaultValue: true,
                         name: 'FORCE_REBUILD'
                 ),
@@ -64,6 +68,14 @@ properties([
     ])
 ])
 
+
+import java.text.SimpleDateFormat
+
+def date = new Date()
+ts13 = date.getTime() / 1000
+ts10 = (Long) ts13
+sdf = new SimpleDateFormat("yyyyMMdd")
+day = sdf.format(date)
 
 buildPathMap = [
     "tidb": 'go/src/github.com/pingcap/tidb',
@@ -368,6 +380,27 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     build job: "docker-common",
             wait: true,
             parameters: paramsDocker
+    
+    if (!params.DEBUG && params.PUSH_GCR) {
+         pushImageToGCR(hotfixImageName, repo, product, tag)
+    }
+}
+
+
+def pushImageToGCR(harborImage, repo, product, tag) {
+    // 命名规范：
+    //- vX.Y.Z-yyyymmdd-<timestamp>，举例：v6.1.0-20220524-1654851973
+    def imageTag = "${tag}-${ts10}"
+    def gcrImage = "gcr.io/pingcap-public/dbaas/${product}:${imageTag}"
+    def default_params = [
+        string(name: 'SOURCE_IMAGE', value: harborImage),
+        string(name: 'TARGET_IMAGE', value: gcrImage),
+    ]
+    println "push image ${harborImage} to ${gcrImage}"
+    build(job: "jenkins-image-syncer",
+            parameters: default_params,
+            wait: true)
+    HOTFIX_BUILD_RESULT["results"][product]["gcrImage"] = gcrImage
 }
 
 
