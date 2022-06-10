@@ -298,7 +298,7 @@ def checkOutCode(repo, tag) {
 
 def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     if (packageName in ["tikv", "tidb", "pd", "ticdc"]) {
-        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-amd64"] = "${FILE_SERVER_URL}/download/${patchFile}"  
+        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-${arch}"] = "${FILE_SERVER_URL}/download/${patchFile}"  
         println "build tiup patch for ${packageName}"
         run_with_lightweight_pod {
             container("golang") {
@@ -317,7 +317,6 @@ def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     } else {
         println "skip build tiup patch for ${packageName}"
     }
-
 }
 
 def buildOne(repo, product, hash, arch, binary, tag) {
