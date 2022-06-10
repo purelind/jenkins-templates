@@ -48,6 +48,10 @@ properties([
                         name: 'PUSH_GCR'
                 ),
                 booleanParam(
+                        defaultValue: false,
+                        name: 'PUSH_DOCKER_HUB'
+                ),
+                booleanParam(
                         defaultValue: true,
                         name: 'FORCE_REBUILD'
                 ),
@@ -494,6 +498,12 @@ def buildByTag(repo, tag, packageName) {
         if (!params.DEBUG && params.PUSH_GCR) {
             pushImageToGCR(manifestImage, repo, packageName, tag)
         }
+    }
+
+    if (!params.DEBUG && params.PUSH_DOCKERHUB) {
+        // only push image to dockerhub when not debug
+        def dockerHubImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
+        pushImageToDockerhub(dockerHubImage, repo, packageName, tag)
     }
 
     println "build hotfix success"
