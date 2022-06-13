@@ -122,15 +122,21 @@ def updatePipelineRun(PipelineSpec pipeline) {
 def triggerTask(taskName,params) {
     result = build(job: taskName, parameters: params, wait: true,propagate: false)
 
+    def taskDetailUrl = ""
+    def taskResultMessage = ""
     if (result.getResult() != "SUCCESS" && taskName in ["atom-ut", "atom-gosec"]) {
-        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
+        taskDetailUrl = "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests"
+        sh(script: "echo $taskDetailUrl", label: taskDetailUrl)
     } else {
-        println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
+        taskDetailUrl = "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline"
+        sh(script: "echo $taskDetailUrl", label: taskDetailUrl)
     }
     if (result.getDescription() != null && result.getDescription() != "") {
-        println("task ${result.getResult()}: ${result.getDescription()}")
+        taskResultMessage = "task ${result.getResult()}: ${result.getDescription()}"
+        sh(script: "echo $taskResultMessage", label: taskResultMessage)
     } else {
-        println("task ${result.getResult()}")
+        taskResultMessage = "task ${result.getResult()}"
+        sh(script: "echo $taskResultMessage", label: taskResultMessage)
     }
 
     return result
@@ -194,16 +200,22 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
                 def params = [
                 string(name: "INPUT_JSON", value: taskJsonString),
                 ]
+                def taskDetailUrl = ""
+                def taskResultMessage = ""
                 def result = build(job: originTask.checkerName, parameters: params, wait: true, propagate: false)
                 if (result.getResult() != "SUCCESS" && originTask.taskName in ["ut-check", "gosec-check"]) {
-                    println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests")
+                    taskDetailUrl = "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/tests"
+                    sh(script: "echo $taskDetailUrl", label: taskDetailUrl)
                 } else {
-                    println("Detail: ${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline")
+                    taskDetailUrl = "${CI_JENKINS_BASE_URL}/blue/organizations/jenkins/${result.getFullProjectName()}/detail/${result.getFullProjectName()}/${result.getNumber().toString()}/pipeline"
+                    sh(script: "echo $taskDetailUrl", label: taskDetailUrl)
                 }
                 if (result.getDescription() != null && result.getDescription() != "") {
-                    println("task ${result.getResult()}: ${result.getDescription()}")
+                    taskResultMessage = "task ${result.getResult()}: ${result.getDescription()}"
+                    sh(script: "echo $taskResultMessage", label: taskResultMessage)
                 } else {
-                    println("task ${result.getResult()}")
+                    taskResultMessage = "task ${result.getResult()}"
+                    sh(script: "echo $taskResultMessage", label: taskResultMessage)
                 }
                 notify_results_array << [
                     name: originTask.taskName, 
