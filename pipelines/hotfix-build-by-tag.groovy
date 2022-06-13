@@ -44,6 +44,14 @@ properties([
                         description: 'hotfix tag, example v5.1.1-20211227',
                 ),
                 booleanParam(
+                        defaultValue: false,
+                        name: 'PUSH_GCR'
+                ),
+                booleanParam(
+                        defaultValue: false,
+                        name: 'PUSH_DOCKER_HUB'
+                ),
+                booleanParam(
                         defaultValue: true,
                         name: 'FORCE_REBUILD'
                 ),
@@ -64,6 +72,14 @@ properties([
     ])
 ])
 
+
+import java.text.SimpleDateFormat
+
+def date = new Date()
+ts13 = date.getTime() / 1000
+ts10 = (Long) ts13
+sdf = new SimpleDateFormat("yyyyMMdd")
+day = sdf.format(date)
 
 buildPathMap = [
     "tidb": 'go/src/github.com/pingcap/tidb',
@@ -286,7 +302,7 @@ def checkOutCode(repo, tag) {
 
 def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     if (packageName in ["tikv", "tidb", "pd", "ticdc"]) {
-        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-amd64"] = "${FILE_SERVER_URL}/download/${patchFile}"  
+        HOTFIX_BUILD_RESULT["results"][packageName]["tiup-patch-${arch}"] = "${FILE_SERVER_URL}/download/${patchFile}"  
         println "build tiup patch for ${packageName}"
         run_with_lightweight_pod {
             container("golang") {
@@ -305,7 +321,6 @@ def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     } else {
         println "skip build tiup patch for ${packageName}"
     }
-
 }
 
 def buildOne(repo, product, hash, arch, binary, tag) {
@@ -346,13 +361,18 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     
 
     def hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${product}:${tag}"
+    // if arch is both, we need to build multi-arch image
+    // we build arm64 and amd64 image first, then manfest them and push to harbor
+    if (params.ARCH == "both" ) {
+        hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${product}-${arch}:${tag}"
+    }
     if (arch == "arm64") {
         hotfixImageName = "${HARBOR_PROJECT_PREFIX}/${product}-arm64:${tag}"
     }
     if (params.DEBUG) {
         hotfixImageName = "${hotfixImageName}-debug"
     }
-    HOTFIX_BUILD_RESULT["results"][product]["image"] = hotfixImageName
+    HOTFIX_BUILD_RESULT["results"][product]["image-${arch}"] = hotfixImageName
     println "build hotfix image ${hotfixImageName}"
     def dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/${product}"
     def paramsDocker = [
@@ -368,6 +388,46 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     build job: "docker-common",
             wait: true,
             parameters: paramsDocker
+    
+}
+
+
+def pushImageToGCR(harborImage, repo, product, tag) {
+    // 命名规范：
+    //- vX.Y.Z-yyyymmdd-<timestamp>，举例：v6.1.0-20220524-1654851973
+    def imageTag = "${tag}-${ts10}"
+    def gcrImage = "gcr.io/pingcap-public/dbaas/${product}:${imageTag}"
+    def default_params = [
+        string(name: 'SOURCE_IMAGE', value: harborImage),
+        string(name: 'TARGET_IMAGE', value: gcrImage),
+    ]
+    println "sync image ${harborImage} to ${gcrImage}"
+    build(job: "jenkins-image-syncer",
+            parameters: default_params,
+            wait: true)
+    HOTFIX_BUILD_RESULT["results"][product]["gcrImage"] = gcrImage
+}
+
+def pushImageToDockerhub(harborImage, repo, product, tag) {
+    // 企业版镜像不能 push 到 dockerhub
+    if (params.EDITION == "enterprise") {
+        prntln "skip push image to dockerhub for enterprise edition"
+        println "please check your input parameters"
+        throw new Exception("skip push image to dockerhub for enterprise edition")
+    }
+    // 命名规范：
+    //- vX.Y.Z-yyyymmdd，举例：v6.1.0-20220524
+    def imageTag = "${tag}"
+    def dockerHubImage = "pingcap/${product}:${imageTag}"
+    def default_params = [
+        string(name: 'SOURCE_IMAGE', value: harborImage),
+        string(name: 'TARGET_IMAGE', value: dockerHubImage),
+    ]
+    println "sync image ${harborImage} to ${dockerHubImage}"
+    build(job: "jenkins-image-syncer",
+            parameters: default_params,
+            wait: true)
+    HOTFIX_BUILD_RESULT["results"][product]["dockerHubImage"] = dockerHubImage
 }
 
 
@@ -417,6 +477,42 @@ def buildByTag(repo, tag, packageName) {
         break
     }
     parallel builds
+
+    if (params.ARCH == "both") {
+        def amd64Image = HOTFIX_BUILD_RESULT["results"][product]["image-amd64"]
+        def arm64Image = HOTFIX_BUILD_RESULT["results"][product]["image-arm64"]
+        def manifestImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
+        HOTFIX_BUILD_RESULT["results"][product]["multi-arch"] = manifestImage
+        if (params.DEBUG) {
+            manifestImage = "${manifestImage}-debug"
+        }
+        def paramsManifest = [
+            string(name: "AMD64_IMAGE", value: amd64Image),
+            string(name: "ARM64_IMAGE", value: arm64Image),
+            string(name: "MULTI_ARCH_IMAGE", value: manifestImage),
+        ]
+        stage("build manifest image") {
+            build job: "manifest-multiarch-common",
+                wait: true,
+                parameters: paramsManifest
+        }
+        
+        // all image push gcr are multiarch images
+        // only push image to gcr when not debug
+        if (!params.DEBUG && params.PUSH_GCR) {
+            stage("push image gcr") {
+                pushImageToGCR(manifestImage, repo, packageName, tag)  
+            }
+        }
+    }
+
+    if (!params.DEBUG && params.PUSH_DOCKERHUB) {
+        // only push image to dockerhub when not debug
+        def dockerHubImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
+        stage("push image dockerhub") {
+            pushImageToDockerhub(dockerHubImage, repo, packageName, tag)
+        }
+    }
 
     println "build hotfix success"
     println "build result: ${HOTFIX_BUILD_RESULT}"
