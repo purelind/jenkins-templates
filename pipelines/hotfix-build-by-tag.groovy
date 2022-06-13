@@ -482,6 +482,7 @@ def buildByTag(repo, tag, packageName) {
         def amd64Image = HOTFIX_BUILD_RESULT["results"][product]["image-amd64"]
         def arm64Image = HOTFIX_BUILD_RESULT["results"][product]["image-arm64"]
         def manifestImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
+        HOTFIX_BUILD_RESULT["results"][product]["multi-arch"] = manifestImage
         if (params.DEBUG) {
             manifestImage = "${manifestImage}-debug"
         }
@@ -490,20 +491,27 @@ def buildByTag(repo, tag, packageName) {
             string(name: "ARM64_IMAGE", value: arm64Image),
             string(name: "MULTI_ARCH_IMAGE", value: manifestImage),
         ]
-        build job: "manifest-multiarch-common",
+        stage("build manifest image") {
+            build job: "manifest-multiarch-common",
                 wait: true,
                 parameters: paramsManifest
+        }
+        
         // all image push gcr are multiarch images
         // only push image to gcr when not debug
         if (!params.DEBUG && params.PUSH_GCR) {
-            pushImageToGCR(manifestImage, repo, packageName, tag)
+            stage("push image gcr") {
+                pushImageToGCR(manifestImage, repo, packageName, tag)  
+            }
         }
     }
 
     if (!params.DEBUG && params.PUSH_DOCKERHUB) {
         // only push image to dockerhub when not debug
         def dockerHubImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
-        pushImageToDockerhub(dockerHubImage, repo, packageName, tag)
+        stage("push image dockerhub") {
+            pushImageToDockerhub(dockerHubImage, repo, packageName, tag)
+        }
     }
 
     println "build hotfix success"
