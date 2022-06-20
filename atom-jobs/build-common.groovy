@@ -147,8 +147,11 @@ def goBuildPod = "${GO1180_BUILD_SLAVE}"
 def GO_BIN_PATH = "/usr/local/go1.18.2/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 if ( goVersion == "go1.16" ) {
-    goBuildPod = "${GO1160_BUILD_SLAVE}"
-    GO_BIN_PATH = "/usr/local/go1.16.4/bin"
+//    tidb-tools only use branch master and use newest go version
+    if (REPO != "tidb-tools") {
+        goBuildPod = "${GO1160_BUILD_SLAVE}"
+        GO_BIN_PATH = "/usr/local/go1.16.4/bin"
+    }
 }
 if ( goVersion == "go1.13" ) {
     goBuildPod = "${GO_BUILD_SLAVE}"
