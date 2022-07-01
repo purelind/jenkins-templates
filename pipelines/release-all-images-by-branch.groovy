@@ -55,7 +55,7 @@ cdc_sha1 = ""
 dm_sha1 = ""
 dumpling_sha1 = ""
 ng_monitoring_sha1 = ""
-tidb_monitor_initializer_sha1=""
+tidb_monitor_initializer_sha1 = ""
 
 // ***
 // thress type image: noremal, failpoint, debug, multiArch
@@ -661,8 +661,8 @@ try {
                 releaseReposMultiArch = ["tidb", "tikv", "pd", "br", "tidb-lightning", "ticdc", "dumpling", "tidb-binlog", "dm", "ng-monitoring"]
             }
             for (item in releaseReposMultiArch) {
-                def  product = "${item}"
-                def  stageName = "${product}-multi-arch"
+                def product = "${item}"
+                def stageName = "${product}-multi-arch"
                 if (params.NEED_MULTIARCH == "false") {
                     stageName = "${product}"
                 }
@@ -677,7 +677,7 @@ try {
             }
             failpointRepos = ["tidb", "pd", "tikv", "br", "tidb-lightning"]
             for (item_failpoint in failpointRepos) {
-                def  product_failpoint = "${item_failpoint}"
+                def product_failpoint = "${item_failpoint}"
                 builds["${item_failpoint}-failpoint"] = {
                     retry(2) {
                         release_one_enable_failpoint(product_failpoint)
@@ -702,69 +702,74 @@ try {
                     [$class: 'StringParameterValue', name: 'SEND_TYPE', value: "FAILURE"]
             ]
     getHash()
+    upload_result_to_db()
 
 }
 
 def getHash() {
-    sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
-    tidb_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tidb -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    tikv_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tikv -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    pd_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=pd -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    if (GIT_BRANCH=='master' || GIT_BRANCH >= "release-5.2") {
-        tidb_br_sha1 = tidb_sha1
-    } else {
-        tidb_br_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=br -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    }
-    tidb_binlog_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tidb-binlog -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    tiflash_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tics -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    cdc_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ticdc -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+    node("delivery") {
+        container("delivery") {
+            sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
+            tidb_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tidb -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            tikv_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tikv -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            pd_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=pd -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            if (GIT_BRANCH == 'master' || GIT_BRANCH >= "release-5.2") {
+                tidb_br_sha1 = tidb_sha1
+            } else {
+                tidb_br_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=br -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            }
+            tidb_binlog_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tidb-binlog -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            tiflash_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=tics -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            cdc_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ticdc -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
 
-    if (GIT_BRANCH=='master' || GIT_BRANCH >= "release-5.3") {
-        dumpling_sha1 = tidb_sha1
-        dm_sha1 = cdc_sha1
-        ng_monitoring_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ng-monitoring -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    } else {
-        dumpling_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=dumpling -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
-    }
+            if (GIT_BRANCH == 'master' || GIT_BRANCH >= "release-5.3") {
+                dumpling_sha1 = tidb_sha1
+                dm_sha1 = cdc_sha1
+                ng_monitoring_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ng-monitoring -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            } else {
+                dumpling_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=dumpling -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+            }
 
-    tidb_lightning_sha1 = tidb_br_sha1
-    tidb_monitor_initializer_sha1=sh(returnStdout: true, script: "python gethash.py -repo=monitoring -version=master").trim()
+            tidb_lightning_sha1 = tidb_br_sha1
+            tidb_monitor_initializer_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=monitoring -version=master").trim()
+        }
+    }
 }
 
 def upload_result_to_db() {
-    pipeline_build_id= params.PIPELINE_BUILD_ID
-    pipeline_id= "7"
-    pipeline_name= "Nightly Image Build For QA"
-    status= currentBuild.result
-    build_number= BUILD_NUMBER
-    job_name= JOB_NAME
-    artifact_meta= "tidb commit:" + tidb_sha1 + ",tikv commit:" + tikv_sha1 + ",tiflash commit:" + tiflash_sha1+ ",dumpling commit:" + dumpling_sha1+ ",pd commit:" + pd_sha1 + ",tidb-binlog commit:" + tidb_binlog_sha1 +"ticdc commit:" + cdc_sha1 + ",dm commit:" + dm_sha1 + ",br commit:" + tidb_sha1 + ",lightning commit:" + tidb_sha1 + ",tidb-monitor-initializer commit:" + tidb_monitor_initializer_sha1 + ",ng-monitoring commit:" + ng_monitoring_sha1
-    begin_time= begin_time
-    end_time= new Date().format('yyyy-MM-dd HH:mm:ss')
-    triggered_by= "sre-bot"
-    component= "All"
-    arch= "All"
-    artifact_type= "community image"
-    branch= params.GIT_BRANCH
-    version= "None"
-    build_type= "nightly-build"
+    pipeline_build_id = params.PIPELINE_BUILD_ID
+    pipeline_id = "7"
+    pipeline_name = "Nightly Image Build For QA"
+    status = currentBuild.result
+    build_number = BUILD_NUMBER
+    job_name = JOB_NAME
+    artifact_meta = "tidb commit:" + tidb_sha1 + ",tikv commit:" + tikv_sha1 + ",tiflash commit:" + tiflash_sha1 + ",dumpling commit:" + dumpling_sha1 + ",pd commit:" + pd_sha1 + ",tidb-binlog commit:" + tidb_binlog_sha1 + "ticdc commit:" + cdc_sha1 + ",dm commit:" + dm_sha1 + ",br commit:" + tidb_sha1 + ",lightning commit:" + tidb_sha1 + ",tidb-monitor-initializer commit:" + tidb_monitor_initializer_sha1 + ",ng-monitoring commit:" + ng_monitoring_sha1
+    begin_time = begin_time
+    end_time = new Date().format('yyyy-MM-dd HH:mm:ss')
+    triggered_by = "sre-bot"
+    component = "All"
+    arch = "All"
+    artifact_type = "community image"
+    branch = params.GIT_BRANCH
+    version = "None"
+    build_type = "nightly-build"
 
     build job: 'upload_result_to_db',
             wait: true,
             parameters: [
                     [$class: 'StringParameterValue', name: 'PIPELINE_BUILD_ID', value: pipeline_build_id],
                     [$class: 'StringParameterValue', name: 'PIPELINE_ID', value: pipeline_id],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value:  pipeline_name],
-                    [$class: 'StringParameterValue', name: 'STATUS', value:  status],
-                    [$class: 'StringParameterValue', name: 'BUILD_NUMBER', value:  build_number],
-                    [$class: 'StringParameterValue', name: 'JOB_NAME', value:  job_name],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value: pipeline_name],
+                    [$class: 'StringParameterValue', name: 'STATUS', value: status],
+                    [$class: 'StringParameterValue', name: 'BUILD_NUMBER', value: build_number],
+                    [$class: 'StringParameterValue', name: 'JOB_NAME', value: job_name],
                     [$class: 'StringParameterValue', name: 'ARTIFACT_META', value: artifact_meta],
                     [$class: 'StringParameterValue', name: 'BEGIN_TIME', value: begin_time],
-                    [$class: 'StringParameterValue', name: 'END_TIME', value:  end_time],
-                    [$class: 'StringParameterValue', name: 'TRIGGERED_BY', value:  triggered_by],
+                    [$class: 'StringParameterValue', name: 'END_TIME', value: end_time],
+                    [$class: 'StringParameterValue', name: 'TRIGGERED_BY', value: triggered_by],
                     [$class: 'StringParameterValue', name: 'COMPONENT', value: component],
-                    [$class: 'StringParameterValue', name: 'ARCH', value:  arch],
-                    [$class: 'StringParameterValue', name: 'ARTIFACT_TYPE', value:  artifact_type],
+                    [$class: 'StringParameterValue', name: 'ARCH', value: arch],
+                    [$class: 'StringParameterValue', name: 'ARTIFACT_TYPE', value: artifact_type],
                     [$class: 'StringParameterValue', name: 'BRANCH', value: branch],
                     [$class: 'StringParameterValue', name: 'VERSION', value: version],
                     [$class: 'StringParameterValue', name: 'BUILD_TYPE', value: build_type]
