@@ -792,7 +792,7 @@ def release(product, label) {
                 def config = readYaml(file: ".toolchain.yml")
                 image_tag_suffix = config.image_tag_suffix
             }
-            label = "tiflash-llvm${image_tag_suffix}".replaceAll('.', '-')
+            label = "tiflash-llvm${image_tag_suffix}".replaceAll('\\.', '-')
         }
     }
 
