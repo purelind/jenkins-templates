@@ -787,7 +787,12 @@ def release(product, label) {
 
     if (PRODUCT == 'tics') {
         if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
-            label = "tiflash-llvm"
+            def image_tag_suffix = ""
+            if (fileExists(".toolchain.yml")) {
+                def config = readYaml(file: ".toolchain.yml")
+                image_tag_suffix = config.image_tag_suffix
+            }
+            label = "tiflash-llvm${image_tag_suffix}".replaceAll('.', '-')
         }
     }
 
