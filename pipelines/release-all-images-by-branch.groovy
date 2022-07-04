@@ -725,7 +725,11 @@ def getHash() {
             if (GIT_BRANCH == 'master' || GIT_BRANCH >= "release-5.3") {
                 dumpling_sha1 = tidb_sha1
                 dm_sha1 = cdc_sha1
-                ng_monitoring_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ng-monitoring -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+                if(GIT_BRANCH == 'master'){
+                    ng_monitoring_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ng-monitoring -version=main -s=${FILE_SERVER_URL}").trim()
+                }else{
+                    ng_monitoring_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=ng-monitoring -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
+                }
             } else {
                 dumpling_sha1 = sh(returnStdout: true, script: "python gethash.py -repo=dumpling -version=${GIT_BRANCH} -s=${FILE_SERVER_URL}").trim()
             }
