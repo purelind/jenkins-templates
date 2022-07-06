@@ -757,6 +757,7 @@ def upload_result_to_db() {
     branch = params.GIT_BRANCH
     version = "None"
     build_type = "nightly-build"
+    push_gcr = "Yes"
 
     build job: 'upload_result_to_db',
             wait: true,
@@ -776,7 +777,8 @@ def upload_result_to_db() {
                     [$class: 'StringParameterValue', name: 'ARTIFACT_TYPE', value: artifact_type],
                     [$class: 'StringParameterValue', name: 'BRANCH', value: branch],
                     [$class: 'StringParameterValue', name: 'VERSION', value: version],
-                    [$class: 'StringParameterValue', name: 'BUILD_TYPE', value: build_type]
+                    [$class: 'StringParameterValue', name: 'BUILD_TYPE', value: build_type],
+                    [$class: 'StringParameterValue', name: 'PUSH_GCR', value: push_gcr]
             ]
 
 }
