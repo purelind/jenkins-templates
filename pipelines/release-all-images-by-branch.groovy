@@ -766,7 +766,7 @@ def upload_result_to_db() {
     branch = params.GIT_BRANCH
     version = "None"
     build_type = "nightly-build"
-    push_gcr = "Yes"
+    push_gcr = "No"
 
     build job: 'upload_result_to_db',
             wait: true,
