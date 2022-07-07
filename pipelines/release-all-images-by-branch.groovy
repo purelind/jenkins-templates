@@ -381,7 +381,7 @@ EOF
     } else {
         println "build single arch image ${repo} (linux amd64)"
         def dockerProduct = repo
-        def amd64Images = buildInfo.imageNameAmd64
+        amd64Images = buildInfo.imageNameAmd64
         if (repo == "tidb-lightning") {
             dockerProduct = "br"
         }
