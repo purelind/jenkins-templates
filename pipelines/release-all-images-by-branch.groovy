@@ -403,6 +403,13 @@ EOF
                 wait: true,
                 parameters: paramsDockerAmd64
     }
+    sync_dest_image_name=amd64Images.replace("-linux-amd64","")
+    sync_image_params = [
+            string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
+            string(name: 'SOURCE_IMAGE', value: amd64Images),
+            string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
+    ]
+    build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
 }
 
 
