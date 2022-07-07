@@ -403,13 +403,15 @@ EOF
                 wait: true,
                 parameters: paramsDockerAmd64
     }
-    sync_dest_image_name=amd64Images.replace("-linux-amd64","")
-    sync_image_params = [
-            string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
-            string(name: 'SOURCE_IMAGE', value: amd64Images),
-            string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
-    ]
-    build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
+    if (repo != "tics") {
+        sync_dest_image_name = amd64Images.replace("-linux-amd64", "")
+        sync_image_params = [
+                string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
+                string(name: 'SOURCE_IMAGE', value: amd64Images),
+                string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
+        ]
+        build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
+    }
 }
 
 
@@ -656,7 +658,7 @@ try {
             }
             releaseRepos = ["tics"]
             for (item in releaseRepos) {
-                def String product = "${item}"
+                def product = "${item}"
                 builds["${item}-build"] = {
                     retry(2) {
                         release_one_normal(product)
