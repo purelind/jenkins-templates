@@ -381,7 +381,8 @@ EOF
     } else {
         println "build single arch image ${repo} (linux amd64)"
         def dockerProduct = repo
-        amd64Images = buildInfo.imageNameAmd64
+        def amd64Images = buildInfo.imageNameAmd64
+
         if (repo == "tidb-lightning") {
             dockerProduct = "br"
         }
@@ -404,10 +405,11 @@ EOF
                 parameters: paramsDockerAmd64
     }
     if (repo != "tics") {
-        sync_dest_image_name = amd64Images.replace("-linux-amd64", "")
+        def sourceImage=buildInfo.imageNameAmd64
+        sync_dest_image_name = sourceImage.replace("-linux-amd64", "")
         sync_image_params = [
                 string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
-                string(name: 'SOURCE_IMAGE', value: amd64Images),
+                string(name: 'SOURCE_IMAGE', value: sourceImage),
                 string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
         ]
         build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
@@ -708,7 +710,7 @@ try {
                     [$class: 'StringParameterValue', name: 'RESULT_BUILD_NUMBER', value: "${BUILD_NUMBER}"],
                     [$class: 'StringParameterValue', name: 'RESULT_RUN_DISPLAY_URL', value: "${RUN_DISPLAY_URL}"],
                     [$class: 'StringParameterValue', name: 'RESULT_TASK_START_TS', value: "${taskStartTimeInMillis}"],
-                    [$class: 'StringParameterValue', name: 'SEND_TYPE', value: "FAILURE"]
+                    [$class: 'StringParameterValue', name: 'SEND_TYPE', value: "ALL"]
             ]
     getHash()
     upload_result_to_db()
