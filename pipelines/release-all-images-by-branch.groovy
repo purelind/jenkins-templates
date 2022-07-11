@@ -403,16 +403,17 @@ EOF
         build job: "docker-common-check",
                 wait: true,
                 parameters: paramsDockerAmd64
-    }
-    if (repo != "tics") {
-        def sourceImage=buildInfo.imageNameAmd64
-        sync_dest_image_name = sourceImage.replace("-linux-amd64", "")
-        sync_image_params = [
-                string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
-                string(name: 'SOURCE_IMAGE', value: sourceImage),
-                string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
-        ]
-        build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
+
+        if (repo != "tics") {
+            def sourceImage=buildInfo.imageNameAmd64
+            sync_dest_image_name = sourceImage.replace("-linux-amd64", "")
+            sync_image_params = [
+                    string(name: 'triggered_by_upstream_ci', value: "docker-common-nova"),
+                    string(name: 'SOURCE_IMAGE', value: sourceImage),
+                    string(name: 'TARGET_IMAGE', value: sync_dest_image_name),
+            ]
+            build(job: "jenkins-image-syncer", parameters: sync_image_params, wait: true, propagate: true)
+        }
     }
 }
 
