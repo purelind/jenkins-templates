@@ -43,6 +43,12 @@ properties([
                         trim: true,
                         description: 'hotfix tag, example v5.1.1-20211227',
                 ),
+                string(
+                        defaultValue: '',
+                        name: 'ENTERPRISE_PLUGIN_HASH',
+                        trim: true,
+                        description: '',
+                ),
                 booleanParam(
                         defaultValue: false,
                         name: 'PUSH_GCR'
@@ -68,7 +74,13 @@ properties([
                     name: 'ARCH',
                     choices: ['amd64', 'arm64', "both"],
                     description: 'build linux amd64 or arm64 or both',
-                )
+                ),
+                string(
+                        defaultValue: '-1',
+                        name: 'PIPELINE_BUILD_ID',
+                        trim: true,
+                        description: 'upload use',
+                ),
     ])
 ])
 
@@ -80,6 +92,7 @@ ts13 = date.getTime() / 1000
 ts10 = (Long) ts13
 sdf = new SimpleDateFormat("yyyyMMdd")
 day = sdf.format(date)
+begin_time = new Date().format('yyyy-MM-dd HH:mm:ss')
 
 buildPathMap = [
     "tidb": 'go/src/github.com/pingcap/tidb',
@@ -149,14 +162,14 @@ def debugEnv() {
 def selectImageGoVersion(repo, tag) {
     def originalTag = tag.substring(1)
     if (repo in ["tidb", "pd", "tiflow"]) {
-       println "selectImageGoVersion: " + repo + " " + originalTag
-       if (originalTag >= "v5.2.0") {
-           println "repo ${repo} with tag ${originalTag} is use go1.16"
-           return "imagego1.16.0"
-       } else {
-           println "repo ${repo} with tag ${originalTag} is use go1.13"
-           return "imagego1.13.7"
-       }
+      println "selectImageGoVersion: " + repo + " " + originalTag
+      if (originalTag >= "v5.2.0") {
+          println "repo ${repo} with tag ${originalTag} is use go1.16"
+          return "imagego1.16.0"
+      } else {
+          println "repo ${repo} with tag ${originalTag} is use go1.13"
+          return "imagego1.13.7"
+      }
     } else {
         println "repo {$repo} not a golang repo, return a default go1.16 image"
         return "imagego1.16.0"
@@ -348,9 +361,44 @@ def buildOne(repo, product, hash, arch, binary, tag) {
         [$class: 'BooleanParameterValue', name: 'NEED_SOURCE_CODE', value: needSourceCode],
         [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
     ]
-    build job: "build-common",
+    println "params: ${paramsBuild}"
+    builds = [:]
+    builds["build-${arch}-${params_product}"] = {
+        build job: "build-common",
             wait: true,
             parameters: paramsBuild
+    }
+
+    def plugin_output_binary = "builds/hotfix/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
+    if (params.DEBUG) { 
+        plugin_output_binary = "builds/hotfix-debug/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
+    }
+    if (product == "tidb" && EDITION == "enterprise") {
+        println "build tidb enterprise edition binary"
+
+        def paramsBuildPlugin = [
+            string(name: "ARCH", value: arch),
+            string(name: "OS", value: "linux"),
+            string(name: "EDITION", value: EDITION),
+            string(name: "OUTPUT_BINARY", value: plugin_output_binary),
+            string(name: "REPO", value: "enterprise-plugin"),
+            string(name: "PRODUCT", value: "enterprise-plugin"),
+            string(name: "GIT_HASH", value: ENTERPRISE_PLUGIN_HASH),
+            string(name: "TIDB_HASH", value: GIT_HASH),
+            string(name: "RELEASE_TAG", value: tag),
+            [$class: 'BooleanParameterValue', name: 'NEED_SOURCE_CODE', value: false],
+            [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+        ]
+        println "params: ${paramsBuildPlugin}"
+        builds["build-${arch}-enterprise-plugin"] = {
+            build job: "build-common",
+                wait: true,
+                parameters: paramsBuildPlugin
+        }
+
+    }
+
+    parallel builds
 
     def originalFilePath = "${FILE_SERVER_URL}/download/${binary}"
     def patchFilePath = "builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
@@ -375,10 +423,17 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     HOTFIX_BUILD_RESULT["results"][product]["image-${arch}"] = hotfixImageName
     println "build hotfix image ${hotfixImageName}"
     def dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/${product}"
+    if (product == "tidb" && EDITION == "enterprise") { 
+        dockerfile = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/enterprise/${product}"
+    }
+    def INPUT_BINARYS = binary
+    if (product == "tidb" && EDITION == "enterprise") {
+        INPUT_BINARYS = "${binary},${plugin_output_binary}"
+    }
     def paramsDocker = [
         string(name: "ARCH", value: arch),
         string(name: "OS", value: "linux"),
-        string(name: "INPUT_BINARYS", value: binary),
+        string(name: "INPUT_BINARYS", value: INPUT_BINARYS),
         string(name: "REPO", value: product),
         string(name: "PRODUCT", value: product),
         string(name: "RELEASE_TAG", value: tag),
@@ -533,13 +588,59 @@ def notifyToFeishu(buildResultFile) {
     python3 tiinsights-hotfix-builder-notify.py ${buildResultFile}
     """
 }
+def upload_result_to_db() {
+    pipeline_build_id= params.PIPELINE_BUILD_ID
+    pipeline_id= "12"
+    pipeline_name= "Hotfix-Build"
+    status= currentBuild.result
+    build_number= BUILD_NUMBER
+    job_name= JOB_NAME
+    artifact_meta= params.PRODUCT + " commit:" + GIT_HASH
+    begin_time= begin_time
+    end_time= new Date().format('yyyy-MM-dd HH:mm:ss')
+    triggered_by= "sre-bot"
+    component= params.PRODUCT
+    arch= params.ARCH
+    artifact_type= params.EDITION
+    branch= "None"
+    version= params.HOTFIX_TAG
+    build_type= "hotfix-build"
+    if (params.PUSH_GCR == "true") {
+        push_gcr = "Yes"
+    }else{
+        push_gcr = "No"
+    }
+
+    build job: 'upload_result_to_db',
+            wait: true,
+            parameters: [
+                    [$class: 'StringParameterValue', name: 'PIPELINE_BUILD_ID', value: pipeline_build_id],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_ID', value: pipeline_id],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value:  pipeline_name],
+                    [$class: 'StringParameterValue', name: 'STATUS', value:  status],
+                    [$class: 'StringParameterValue', name: 'BUILD_NUMBER', value:  build_number],
+                    [$class: 'StringParameterValue', name: 'JOB_NAME', value:  job_name],
+                    [$class: 'StringParameterValue', name: 'ARTIFACT_META', value: artifact_meta],
+                    [$class: 'StringParameterValue', name: 'BEGIN_TIME', value: begin_time],
+                    [$class: 'StringParameterValue', name: 'END_TIME', value:  end_time],
+                    [$class: 'StringParameterValue', name: 'TRIGGERED_BY', value:  triggered_by],
+                    [$class: 'StringParameterValue', name: 'COMPONENT', value: component],
+                    [$class: 'StringParameterValue', name: 'ARCH', value:  arch],
+                    [$class: 'StringParameterValue', name: 'ARTIFACT_TYPE', value:  artifact_type],
+                    [$class: 'StringParameterValue', name: 'BRANCH', value: branch],
+                    [$class: 'StringParameterValue', name: 'VERSION', value: version],
+                    [$class: 'StringParameterValue', name: 'BUILD_TYPE', value: build_type],
+                    [$class: 'StringParameterValue', name: 'PUSH_GCR', value: push_gcr]
+            ]
+
+}
 
 // TODO
 // verify the build result: binary and docker image
 // def verifyBuildResult() {
 
-
-run_with_pod {
+try{
+    run_with_pod {
     container("golang") {
         stage("hotfix-${REPO}") {
             // TODO enable valid hotfix tag
@@ -565,4 +666,10 @@ run_with_pod {
             }
         }
     }
+    currentBuild.result = "SUCCESS"
+}
+}catch (Exception e){
+    currentBuild.result = "FAILURE"
+}finally{
+    upload_result_to_db()
 }
