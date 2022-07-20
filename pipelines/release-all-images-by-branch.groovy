@@ -119,7 +119,7 @@ def startBuildBinary(arch, binary, actualRepo, repo, sha1, failpoint) {
             [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
             [$class: 'BooleanParameterValue', name: 'FAILPOINT', value: failpoint],
     ]
-    
+
     if (repo == "tics-debug" && GIT_BRANCH == "master") {
         paramsBuild = [
                 string(name: "ARCH", value: arch),
@@ -698,7 +698,10 @@ try {
                     }
                 }
             }
-            releaseRepos = ["tics", "tics-debug"]
+            releaseRepos = ["tics"]
+            if ("${GIT_BRANCH}" == "master") {
+                releaseRepos = ["tics", "tics-debug"]
+            }
             for (item in releaseRepos) {
                 def product = "${item}"
                 builds["${item}-build"] = {
