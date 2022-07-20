@@ -84,7 +84,11 @@ properties([
                         defaultValue: '',
                         name: 'USE_TIFLASH_RUST_CACHE',
                         trim: true                        
-                ),                
+                ),
+                booleanParam(
+                        name: 'TIFLASH_DEBUG',
+                        defaultValue: false
+                ),
     ])
 ])
 
@@ -612,13 +616,26 @@ else
     fi
 
     # check if LLVM toolchain is provided
-    if [[ -d "release-centos7-llvm" && \$(which clang 2>/dev/null) ]]
-    then
-        NPROC=12 release-centos7-llvm/scripts/build-release.sh
+    echo "the new parameter of tiflash debug is : ${params.TIFLASH_DEBUG}"
+    
+    if [[ -d "release-centos7-llvm" && \$(which clang 2>/dev/null) ]]; then
+        if [[ "${params.TIFLASH_DEBUG}" != 'true' ]]; then
+            echo "start release ..........."
+            NPROC=12 release-centos7-llvm/scripts/build-release.sh
+        else
+            echo "start debug ..........."
+            NPROC=12 release-centos7-llvm/scripts/build-debug.sh
+        fi
         mkdir -p ${TARGET}
         mv release-centos7-llvm/tiflash ${TARGET}/tiflash
     else
-        NPROC=12 release-centos7/build/build-release.sh
+        if [[ "${params.TIFLASH_DEBUG}" != 'true' ]]; then
+            echo "start release ..........."
+            NPROC=12 release-centos7/build/build-release.sh
+        else
+            echo "start debug ..........."
+            NPROC=12 release-centos7/build/build-debug.sh
+        fi
         mkdir -p ${TARGET}
         mv release-centos7/tiflash ${TARGET}/tiflash
     fi

@@ -119,6 +119,25 @@ def startBuildBinary(arch, binary, actualRepo, repo, sha1, failpoint) {
             [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
             [$class: 'BooleanParameterValue', name: 'FAILPOINT', value: failpoint],
     ]
+
+
+    if (repo == "tics-debug") {
+        paramsBuild = [
+                string(name: "ARCH", value: arch),
+                string(name: "OS", value: "linux"),
+                string(name: "EDITION", value: "community"),
+                string(name: "OUTPUT_BINARY", value: binary),
+                string(name: "REPO", value: actualRepo),
+                string(name: "PRODUCT", value: "tics"),
+                string(name: "GIT_HASH", value: sha1),
+                string(name: "RELEASE_TAG", value: RELEASE_TAG),
+                string(name: "TARGET_BRANCH", value: GIT_BRANCH),
+                [$class: 'BooleanParameterValue', name: 'TIFLASH_DEBUG', value: true],
+                [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+                [$class: 'BooleanParameterValue', name: 'FAILPOINT', value: failpoint],
+        ]
+    }
+
     println "paramsBuild: ${paramsBuild}"
 
     build job: "build-common",
@@ -155,6 +174,9 @@ def parseBuildInfo(repo) {
     // if (repo == "tiflash") {
     //     actualRepo = "tics"
     // }
+    if (repo == "tics-debug") {
+        actualRepo = "tiflash"
+    }
     // TODO: tidb-lightning is so complex !!!
     // tidb-lightning is a part of br, and br is merged to tidb from release-5.2, so we need to use tidb as actual repo
     if (repo == "tidb-lightning") {
@@ -200,10 +222,14 @@ def parseBuildInfo(repo) {
 
     def binaryAmd64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64.tar.gz"
     def binaryArm64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
-    def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
-    def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
     def binaryAmd64Failpoint = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64-failpoint.tar.gz"
     def binaryArm64Failpoint = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-arm64-failpoint.tar.gz"
+
+    if (repo == "tics-debug") {
+        repo = "tics"
+    }
+    def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
+    def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
 
     if (repo == "tics") {
         dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
@@ -248,12 +274,12 @@ def parseBuildInfo(repo) {
 
 def release_one_normal(repo) {
     def buildInfo = parseBuildInfo(repo)
-
     def buildRepo = buildInfo.actualRepo
     def buildProduct = repo
     if (repo == "tidb-lightning") {
         buildProduct = "br"
     }
+
     stage("build binary") {
         if (test_binary_already_build("${FILE_SERVER_URL}/download/${buildInfo.binaryAmd64}") && !params.FORCE_REBUILD) {
             echo "binary(amd64) already build: ${buildInfo.binaryAmd64}"
@@ -286,6 +312,13 @@ def release_one_normal(repo) {
             amd64Images = "${buildInfo.imageNameAmd64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-amd64"
             arm64Images = "${buildInfo.imageNameArm64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-linux-arm64"
         }
+
+        if (repo == "tics-debug") {
+            amd64Images = "${buildInfo.imageNameAmd64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-debug-linux-amd64"
+            arm64Images = "${buildInfo.imageNameArm64},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-debug-linux-arm64"
+            dockerProduct = "tics"
+        }
+
         stage("build amd64 image") {
             def paramsDockerAmd64 = [
                     string(name: "ARCH", value: "amd64"),
@@ -389,6 +422,12 @@ EOF
         if (repo == "tics") {
             amd64Images = "${buildInfo.imageName},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}"
         }
+
+        if (repo == "tics-debug" && GIT_BRANCH == "master") {
+            amd64Images = "${buildInfo.imageNameForDebug},${HARBOR_PROJECT_PREFIX}/tiflash:master-debug"
+            dockerProduct = "tics"
+        }
+
         def paramsDockerAmd64 = [
                 string(name: "ARCH", value: "amd64"),
                 string(name: "OS", value: "linux"),
@@ -400,6 +439,7 @@ EOF
                 string(name: "RELEASE_DOCKER_IMAGES", value: amd64Images),
                 string(name: "GIT_BRANCH", value: GIT_BRANCH),
         ]
+
         build job: "docker-common-check",
                 wait: true,
                 parameters: paramsDockerAmd64
@@ -659,7 +699,7 @@ try {
                     }
                 }
             }
-            releaseRepos = ["tics"]
+            releaseRepos = ["tics", "tics-debug"]
             for (item in releaseRepos) {
                 def product = "${item}"
                 builds["${item}-build"] = {
