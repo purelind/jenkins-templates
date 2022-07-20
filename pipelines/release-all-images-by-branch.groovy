@@ -119,9 +119,8 @@ def startBuildBinary(arch, binary, actualRepo, repo, sha1, failpoint) {
             [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
             [$class: 'BooleanParameterValue', name: 'FAILPOINT', value: failpoint],
     ]
-
-
-    if (repo == "tics-debug") {
+    
+    if (repo == "tics-debug" && GIT_BRANCH == "master") {
         paramsBuild = [
                 string(name: "ARCH", value: arch),
                 string(name: "OS", value: "linux"),
