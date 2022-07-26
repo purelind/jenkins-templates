@@ -588,6 +588,44 @@ def notifyToFeishu(buildResultFile) {
     python3 tiinsights-hotfix-builder-notify.py ${buildResultFile}
     """
 }
+
+def notifyToFeishuNew(buildResultFile) {
+
+    if(fileExists("tiinsights-hotfix-builder-notify-new.py")){
+        sh "rm tiinsights-hotfix-builder-notify-new.py"
+    }
+    def command = ""
+    if (PRODUCT == "tidb") {
+        command = "./tidb-server -V"
+    } else if (PRODUCT == "tiflash") {
+        command = "/tiflash/tiflash version"
+    } else if (PRODUCT == "ticdc") {
+        command = "./cdc version"
+    } else if (PRODUCT == "tikv") {
+        command = "./tikv-server -V"
+    } else if (PRODUCT == "dm") {
+        command = "./dmctl -V"
+    } else if (PRODUCT == "br") {
+        command = "./br -V"
+    } else if (PRODUCT == "lightning") {
+        command = "./tidb-lightning -V"
+    } else if (PRODUCT == "dumpling") {
+        command = "./dumpling -V"
+    } else if (PRODUCT == "pd") {
+        command = "./pd-server -V"
+    } else if (PRODUCT == "tidb-binlog") {
+        command = "./binlogctl -V"
+    }
+
+    def harbor_addr = "hub.pingcap.net/qa/${REPO}:${HOTFIX_TAG}"
+    sh(returnStdout: true, script: "docker run -i --rm --entrypoint /bin/sh ${harbor_addr} -c \"${command}\" > container_info").trim()
+
+    sh """
+        wget ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiinsights-hotfix-builder-notify-new.py
+        python3 tiinsights-hotfix-builder-notify-new.py ${HOTFIX_BUILD_RESULT_FILE}
+    """
+}
+
 def upload_result_to_db() {
     pipeline_build_id= params.PIPELINE_BUILD_ID
     pipeline_id= "12"
@@ -662,7 +700,8 @@ try{
                 println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
                 buildByTag(REPO, HOTFIX_TAG, PRODUCT)
 
-                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
+//                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
+                notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
             }
         }
     }
