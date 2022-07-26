@@ -700,8 +700,8 @@ try{
                 println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
                 buildByTag(REPO, HOTFIX_TAG, PRODUCT)
 
-//                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
-                notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
+                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
+//                notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
             }
         }
     }
