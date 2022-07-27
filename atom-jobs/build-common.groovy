@@ -446,10 +446,17 @@ rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin
 mkdir -p ${TARGET}/conf  
 
-mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
-mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
-mv dm/dm/master/dm-master.toml ${TARGET}/conf/
-mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
+if [[ -d "dm/dm" ]]; then
+    mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
+    mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
+    mv dm/dm/master/dm-master.toml ${TARGET}/conf/
+    mv dm/dm/worker/dm-worker.toml ${TARGET}/conf/
+else
+    mv dm/master/task_basic.yaml ${TARGET}/conf/
+    mv dm/master/task_advanced.yaml ${TARGET}/conf/
+    mv dm/master/dm-master.toml ${TARGET}/conf/
+    mv dm/worker/dm-worker.toml ${TARGET}/conf/
+fi;
 mv LICENSE ${TARGET}/
 
 # start from v6.0.0(include v6.0.0), dm-ansible is removed, link https://github.com/pingcap/tiflow/pull/4917
