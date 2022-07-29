@@ -593,11 +593,13 @@ def notifyToFeishuNew(buildResultFile) {
     echo "Test successful!"
     node("delivery"){
         container("delivery") {
-            def json = groovy.json.JsonOutput.toJson(buildResultFile)
-            writeJSON file: "${HOTFIX_BUILD_RESULT}", json: json, pretty: 4
+            def json = groovy.json.JsonOutput.toJson(HOTFIX_BUILD_RESULT)
+            echo "${HOTFIX_BUILD_RESULT}"
+            writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
             archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
             echo "${HOTFIX_BUILD_RESULT_FILE}"
             echo "${HOTFIX_BUILD_RESULT}"
+
             if(fileExists("tiinsights-hotfix-builder-notify-new.py")){
                 sh "rm tiinsights-hotfix-builder-notify-new.py"
             }
