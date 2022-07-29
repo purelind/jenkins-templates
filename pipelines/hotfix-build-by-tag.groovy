@@ -594,7 +594,7 @@ def notifyToFeishuNew(buildResultFile) {
     node("delivery"){
         container("delivery") {
             def json = groovy.json.JsonOutput.toJson(buildResultFile)
-            writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+            writeJSON file: "${HOTFIX_BUILD_RESULT}", json: json, pretty: 4
             archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
             echo "${HOTFIX_BUILD_RESULT_FILE}"
             echo "${HOTFIX_BUILD_RESULT}"
