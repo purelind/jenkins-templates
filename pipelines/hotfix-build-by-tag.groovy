@@ -701,6 +701,8 @@ def upload_result_to_db() {
 // TODO
 // verify the build result: binary and docker image
 // def verifyBuildResult() {
+env.DOCKER_HOST = "tcp://localhost:2375"
+env.DOCKER_REGISTRY = "docker.io"
 
 try{
     run_with_pod {
