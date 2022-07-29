@@ -590,40 +590,63 @@ def notifyToFeishu(buildResultFile) {
 }
 
 def notifyToFeishuNew(buildResultFile) {
+    echo "Test successful!"
+    node("delivery"){
+        container("delivery") {
+            def json = groovy.json.JsonOutput.toJson(buildResultFile)
+            writeJSON file: "${HOTFIX_BUILD_RESULT_FILE}", json: json, pretty: 4
+            archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
+            echo "${HOTFIX_BUILD_RESULT_FILE}"
+            echo "${HOTFIX_BUILD_RESULT}"
+            if(fileExists("tiinsights-hotfix-builder-notify-new.py")){
+                sh "rm tiinsights-hotfix-builder-notify-new.py"
+            }
 
-    if(fileExists("tiinsights-hotfix-builder-notify-new.py")){
-        sh "rm tiinsights-hotfix-builder-notify-new.py"
+            // to be modified   v6.1.0-20220712
+            def repo = "${params.REPO}"
+            def tag = "${params.HOTFIX_TAG}"
+            // ------
+            println "notify to feishu: ${repo} ${tag}"
+
+            def command = "./tidb-server -V"
+            if (repo == "tidb") {
+                command = "./tidb-server -V"
+            } else if (repo == "tiflash") {
+                command = "/tiflash/tiflash version"
+            } else if (repo == "ticdc") {
+                command = "./cdc version"
+            } else if (repo == "tikv") {
+                command = "./tikv-server -V"
+            } else if (repo == "dm") {
+                command = "./dmctl -V"
+            } else if (repo == "br") {
+                command = "./br -V"
+            } else if (repo == "lightning") {
+                command = "./tidb-lightning -V"
+            } else if (repo == "dumpling") {
+                command = "./dumpling -V"
+            } else if (repo == "tidb-binlog") {
+                command = "./binlogctl -V"
+            } else if (repo == "pd") {
+                command = "./pd-server -V"
+            } else {
+                echo "repo is : ${repo}, not exist, exit now!"
+                sh "exit 1"
+            }
+
+            def harbor_addr = "hub.pingcap.net/qa/${repo}:${tag}"
+            sh """
+                        docker pull ${harbor_addr}
+                        docker run -i --rm --entrypoint /bin/sh ${harbor_addr} -c \"${command}\" > container_info
+                        cat container_info
+                    """
+            sh """
+                    wget ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiinsights-hotfix-builder-notify-new.py
+                    python tiinsights-hotfix-builder-notify-new.py ${HOTFIX_BUILD_RESULT_FILE}
+                    cat t_text
+                    """
+        }
     }
-    def command = ""
-    if (PRODUCT == "tidb") {
-        command = "./tidb-server -V"
-    } else if (PRODUCT == "tiflash") {
-        command = "/tiflash/tiflash version"
-    } else if (PRODUCT == "ticdc") {
-        command = "./cdc version"
-    } else if (PRODUCT == "tikv") {
-        command = "./tikv-server -V"
-    } else if (PRODUCT == "dm") {
-        command = "./dmctl -V"
-    } else if (PRODUCT == "br") {
-        command = "./br -V"
-    } else if (PRODUCT == "lightning") {
-        command = "./tidb-lightning -V"
-    } else if (PRODUCT == "dumpling") {
-        command = "./dumpling -V"
-    } else if (PRODUCT == "pd") {
-        command = "./pd-server -V"
-    } else if (PRODUCT == "tidb-binlog") {
-        command = "./binlogctl -V"
-    }
-
-    def harbor_addr = "hub.pingcap.net/qa/${REPO}:${HOTFIX_TAG}"
-    sh(returnStdout: true, script: "docker run -i --rm --entrypoint /bin/sh ${harbor_addr} -c \"${command}\" > container_info").trim()
-
-    sh """
-        wget ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiinsights-hotfix-builder-notify-new.py
-        python3 tiinsights-hotfix-builder-notify-new.py ${HOTFIX_BUILD_RESULT_FILE}
-    """
 }
 
 def upload_result_to_db() {
@@ -700,8 +723,8 @@ try{
                 println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
                 buildByTag(REPO, HOTFIX_TAG, PRODUCT)
 
-                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
-//                notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
+//                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
+                notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
             }
         }
     }
