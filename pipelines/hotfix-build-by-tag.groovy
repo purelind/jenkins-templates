@@ -373,8 +373,11 @@ def buildOne(repo, product, hash, arch, binary, tag) {
     if (params.DEBUG) { 
         plugin_output_binary = "builds/hotfix-debug/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
     }
+
+
     if (product == "tidb" && EDITION == "enterprise") {
         println "build tidb enterprise edition binary"
+        HOTFIX_BUILD_RESULT["results"][product]["enterprise-plugin"] = "${FILE_SERVER_URL}/download/${plugin_output_binary}"
 
         def paramsBuildPlugin = [
             string(name: "ARCH", value: arch),
