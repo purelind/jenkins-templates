@@ -85,12 +85,12 @@ buildImgagesh = [:]
 buildImgagesh["dm_monitor_initializer"] = """
 cd monitoring/
 mv Dockerfile Dockerfile.bak
-curl -C - --retry 5 --retry-delay 2 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
+curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 docker build  -t ${imagePlaceHolder} .
 """
 
 buildImgagesh["tics"] = """
-curl -C - --retry 5 --retry-delay 2 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
+curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 if [[ "${RELEASE_TAG}" == "" ]]; then
     # No release tag, the image may be used in testings
     docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
@@ -101,7 +101,7 @@ fi
 """
 
 buildImgagesh["tiflash"] = """
-curl -C - --retry 5 --retry-delay 2 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
+curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 if [[ "${RELEASE_TAG}" == "" ]]; then
     # No release tag, the image may be used in testings
     docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
@@ -133,7 +133,7 @@ if [[ -f "bin/audit-1.so" ]]; then
     cp bin/audit-1.so ./
     echo "plugin file existed: audit-1.so"
 fi
-curl -C - --retry 5 --retry-delay 2 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
+curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 docker build  -t ${imagePlaceHolder} .
 """
 
@@ -150,7 +150,7 @@ def build_image() {
         cd tmp-docker-build
         cp /usr/local/go/lib/time/zoneinfo.zip ./
         cp ../bin/* ./
-        curl -C - --retry 5 --retry-delay 2 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
+        curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
         docker build  -t ${imagePlaceHolder} .
         """
     }
