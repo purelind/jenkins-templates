@@ -147,10 +147,10 @@ def String needUpgradeGoVersion(String tag,String branch) {
     return "go1.18"
 }
 
-def goBuildPod = "${GO1180_BUILD_SLAVE}"
-def GO_BIN_PATH = "/usr/local/go1.18.2/bin"
+def goBuildPod = "build_go1185"
+def GO_BIN_PATH = "/usr/local/go1.18.5/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
-//    tidb-tools only use branch master and use newest go version
+// tidb-tools only use branch master and use newest go version
 if (REPO != "tidb-tools") {
     if (goVersion == "go1.16") {
         goBuildPod = "${GO1160_BUILD_SLAVE}"
@@ -169,7 +169,7 @@ def containerLabel = "golang"
 def binPath = ""
 def useArmPod = false
 if (params.ARCH == "arm64") {
-    GO_BIN_PATH = "/usr/local/go1.18.2rc1/bin"
+    GO_BIN_PATH = "/usr/local/go1.18.5/bin"
 }
 if (params.ARCH == "arm64" && params.PRODUCT in ["tidb", "enterprise-plugin"]) {
     useArmPod = true
@@ -319,7 +319,6 @@ rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin    
 cp binarys/tidb-ctl ${TARGET}/bin/ || true
 cp bin/* ${TARGET}/bin/ 
-
 """
 
 buildsh["tidb-binlog"] = """
@@ -844,7 +843,7 @@ def run_with_arm_go_pod(Closure body) {
             arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16-arm64:latest"
             break
         case "go1.18":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18-arm64:latest"
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
             break
         default:
             println "invalid go version ${goVersion}"
