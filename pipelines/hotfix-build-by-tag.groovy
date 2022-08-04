@@ -647,7 +647,7 @@ def notifyToFeishuNew(buildResultFile) {
                     """
             sh """
                     wget ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiinsights-hotfix-builder-notify-new.py
-                    python tiinsights-hotfix-builder-notify-new.py ${HOTFIX_BUILD_RESULT_FILE}
+                    python tiinsights-hotfix-builder-notify-new.py ${HOTFIX_BUILD_RESULT_FILE} ${command}
                     cat t_text
                     """
         }
