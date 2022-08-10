@@ -609,33 +609,34 @@ def notifyToFeishuNew(buildResultFile) {
 
             // to be modified   v6.1.0-20220712
             def repo = "${params.REPO}"
+            def product = "${params.PRODUCT}"
             def tag = "${params.HOTFIX_TAG}"
             // ------
             println "notify to feishu: ${repo} ${tag}"
 
             def command = "./tidb-server -V"
-            if (repo == "tidb") {
+            if (product == "tidb") {
                 command = "./tidb-server -V"
-            } else if (repo == "tiflash") {
+            } else if (product == "tiflash") {
                 command = "/tiflash/tiflash version"
-            } else if (repo == "ticdc") {
+            } else if (product == "ticdc") {
                 command = "./cdc version"
-            } else if (repo == "tikv") {
+            } else if (product == "tikv") {
                 command = "./tikv-server -V"
-            } else if (repo == "dm") {
+            } else if (product == "dm") {
                 command = "./dmctl -V"
-            } else if (repo == "br") {
+            } else if (product == "br") {
                 command = "./br -V"
-            } else if (repo == "lightning") {
+            } else if (product == "lightning") {
                 command = "./tidb-lightning -V"
-            } else if (repo == "dumpling") {
+            } else if (product == "dumpling") {
                 command = "./dumpling -V"
-            } else if (repo == "tidb-binlog") {
+            } else if (product == "tidb-binlog") {
                 command = "./binlogctl -V"
-            } else if (repo == "pd") {
+            } else if (product == "pd") {
                 command = "./pd-server -V"
             } else {
-                echo "repo is : ${repo}, not exist, exit now!"
+                echo "repo is : ${repo}, product is : ${product}, not exist, exit now!"
                 sh "exit 1"
             }
 
