@@ -32,9 +32,9 @@ def runBody = {config ->
         stage("Test") {
             dir("${ws}/${config.repo}") {
                 sh '''
-                    go get github.com/jstemmer/go-junit-report
-                    go get github.com/axw/gocov/gocov
-                    go get github.com/AlekSi/gocov-xml
+                    go install github.com/jstemmer/go-junit-report@latest
+                    go install github.com/axw/gocov/gocov@latest
+                    go install github.com/AlekSi/gocov-xml@latest
                 '''
                 sh config.params["shellScript"]
             }
