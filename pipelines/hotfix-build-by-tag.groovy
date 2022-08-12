@@ -640,7 +640,7 @@ def notifyToFeishuNew(buildResultFile) {
                 sh "exit 1"
             }
 
-            def harbor_addr = "hub.pingcap.net/qa/${repo}:${tag}"
+            def harbor_addr = "hub.pingcap.net/qa/${product}:${tag}"
             sh """
                         docker pull ${harbor_addr}
                         docker run -i --rm --entrypoint /bin/sh ${harbor_addr} -c \"${command}\" > container_info
