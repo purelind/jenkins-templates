@@ -557,14 +557,14 @@ def buildByTag(repo, tag, packageName) {
         
         // all image push gcr are multiarch images
         // only push image to gcr when not debug
-        if (!params.DEBUG && params.PUSH_GCR) {
+        if (!params.DEBUG.toBoolean() && params.PUSH_GCR.toBoolean()) {
             stage("push image gcr") {
                 pushImageToGCR(manifestImage, repo, packageName, tag)  
             }
         }
     }
 
-    if (!params.DEBUG && params.PUSH_DOCKERHUB) {
+    if (!params.DEBUG.toBoolean() && params.PUSH_DOCKERHUB.toBoolean()) {
         // only push image to dockerhub when not debug
         def dockerHubImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
         stage("push image dockerhub") {
