@@ -702,6 +702,17 @@ def upload_result_to_db() {
 
 }
 
+def testImageWithBasicSql={HOTFIX_TAG, PRODUCT ->
+    if (PRODUCT in ["tidb", "tikv", "pd", "tiflash"]){
+        build job: 'check-images-with-basic-sql',
+                wait: false,
+                parameters: [
+                        string( name: 'hotfixVersion', value: HOTFIX_TAG),
+                        choice( name: 'component', value: PRODUCT)
+                ]
+    }
+}
+
 // TODO
 // verify the build result: binary and docker image
 // def verifyBuildResult() {
@@ -730,6 +741,7 @@ try{
                 }
                 println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
                 buildByTag(REPO, HOTFIX_TAG, PRODUCT)
+                testImageWithBasicSql(HOTFIX_TAG, PRODUCT)
 
 //                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
                 notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
