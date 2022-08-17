@@ -751,6 +751,7 @@ try{
     currentBuild.result = "SUCCESS"
 }
 }catch (Exception e){
+    println "${e}"
     currentBuild.result = "FAILURE"
 }finally{
     upload_result_to_db()
