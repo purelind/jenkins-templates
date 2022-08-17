@@ -564,7 +564,7 @@ def buildByTag(repo, tag, packageName) {
         }
     }
 
-    if (!params.DEBUG.toBoolean() && params.PUSH_DOCKERHUB.toBoolean()) {
+    if (!params.DEBUG.toBoolean() && params.PUSH_DOCKER_HUB.toBoolean()) {
         // only push image to dockerhub when not debug
         def dockerHubImage = "${HARBOR_PROJECT_PREFIX}/${packageName}:${tag}"
         stage("push image dockerhub") {
