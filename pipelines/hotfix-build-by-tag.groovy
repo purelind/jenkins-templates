@@ -708,7 +708,7 @@ def testImageWithBasicSql={HOTFIX_TAG, PRODUCT ->
                 wait: false,
                 parameters: [
                         string( name: 'hotfixVersion', value: HOTFIX_TAG),
-                        choice( name: 'component', value: PRODUCT)
+                        string( name: 'component', value: PRODUCT)
                 ]
     }
 }
