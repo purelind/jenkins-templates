@@ -92,6 +92,15 @@ properties([
     ])
 ])
 
+taskStartTimeInMillis = System.currentTimeMillis()
+taskFinishTimeInMillis = System.currentTimeMillis()
+checkoutStartTimeInMillis = System.currentTimeMillis()
+checkoutFinishTimeInMillis = System.currentTimeMillis()
+compileStartTimeInMillis = System.currentTimeMillis()
+compileFinishTimeInMillis = System.currentTimeMillis()
+uploadStartTimeInMillis = System.currentTimeMillis()
+uploadFinishTimeInMillis = System.currentTimeMillis()
+
 if (params.PRODUCT.length() <= 1) {
     PRODUCT = REPO
 }
@@ -806,7 +815,9 @@ def release(product, label) {
         return
     }
 
+    checkoutStartTimeInMillis = System.currentTimeMillis()
     checkoutCode()
+    checkoutFinishTimeInMillis = System.currentTimeMillis()
 
     if (PRODUCT == 'tics') {
         if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
@@ -822,15 +833,23 @@ def release(product, label) {
     if (label != '') {
         container(label) {
             withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
+                compileStartTimeInMillis = System.currentTimeMillis()
                 sh buildsh[product]
+                compileFinishTimeInMillis = System.currentTimeMillis()
             }
+            uploadStartTimeInMillis = System.currentTimeMillis()
             packageBinary()
+            uploadFinishTimeInMillis = System.currentTimeMillis()
         }
     } else {
         withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
+            compileStartTimeInMillis = System.currentTimeMillis()
             sh buildsh[product]
+            compileFinishTimeInMillis = System.currentTimeMillis()
         }
+        uploadStartTimeInMillis = System.currentTimeMillis()
         packageBinary()
+        uploadFinishTimeInMillis = System.currentTimeMillis()
     }
 }
 
@@ -882,20 +901,72 @@ def run_with_arm_go_pod(Closure body) {
     }
 }
 
-stage("Build ${PRODUCT}") {
-    if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64" &&  params.OS == "linux") {
-        run_with_arm_go_pod{
-            dir("go/src/github.com/pingcap/${PRODUCT}") {
-                deleteDir()
-                release(PRODUCT, containerLabel)
+try {
+    stage("Build ${PRODUCT}") {
+        if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64" &&  params.OS == "linux") {
+            run_with_arm_go_pod{
+                dir("go/src/github.com/pingcap/${PRODUCT}") {
+                    deleteDir()
+                    release(PRODUCT, containerLabel)
+                }
+            }
+        } else {
+            node(nodeLabel) {
+                dir("go/src/github.com/pingcap/${PRODUCT}") {
+                    deleteDir()
+                    release(PRODUCT, containerLabel)
+                }
             }
         }
-    } else {
-        node(nodeLabel) {
-            dir("go/src/github.com/pingcap/${PRODUCT}") {
-                deleteDir()
-                release(PRODUCT, containerLabel)
-            }
-        }
+    }
+    currentBuild.result = "SUCCESS"
+} catch (e) {
+    println "error: ${e}"
+    currentBuild.result = "FAILURE"
+    throw e
+} finally {
+    println "done"
+    def repo_owner = "pingcap"
+    if (REPO == "tikv" || REPO == "importer" || REPO == "pd") {
+        repo_owner = "tikv"
+    }
+    stage("Upload pipeline run data") {
+        taskFinishTimeInMillis = System.currentTimeMillis()
+        compile_duration = compileFinishTimeInMillis - compileStartTimeInMillis
+        compile_duration_seconds = compile_duration / 1000
+        checkout_duration = checkoutFinishTimeInMillis - checkoutStartTimeInMillis
+        checkout_duration_seconds = checkout_duration / 1000
+        upload_duration = uploadFinishTimeInMillis - uploadStartTimeInMillis
+        upload_duration_seconds = upload_duration / 1000
+
+        build job: 'upload-build-common-data-to-db',
+            wait: false,
+            parameters: [
+                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value: "${JOB_NAME}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_TYPE', value: "build binary"],
+                    [$class: 'StringParameterValue', name: 'STATUS', value: currentBuild.result],
+                    [$class: 'StringParameterValue', name: 'OWNER', value: repo_owner],
+                    [$class: 'StringParameterValue', name: 'REPO', value: "${REPO}"],
+                    [$class: 'StringParameterValue', name: 'PRODUCT', value: "${PRODUCT}"],
+                    [$class: 'StringParameterValue', name: 'BRANCH', value: "${TARGET_BRANCH}"],
+                    [$class: 'StringParameterValue', name: 'PR_NUMBER', value: "${GIT_PR}"],
+                    [$class: 'StringParameterValue', name: 'COMMIT_ID', value: "${GIT_HASH}"],
+                    [$class: 'StringParameterValue', name: 'RELEASE_TAG', value: "${RELEASE_TAG}"],
+                    [$class: 'StringParameterValue', name: 'OS_ARCH', value: "${OS}-${ARCH}"],
+                    [$class: 'StringParameterValue', name: 'EDITION', value: "${EDITION}"],
+                    [$class: 'StringParameterValue', name: 'FORCE_REBUILD', value: "${FORCE_REBUILD}"],
+                    [$class: 'StringParameterValue', name: 'NEED_SOURCE_CODE', value: "${NEED_SOURCE_CODE}"],
+                    [$class: 'StringParameterValue', name: 'JENKINS_BUILD_ID', value: "${BUILD_NUMBER}"],
+                    [$class: 'StringParameterValue', name: 'JENKINS_RUN_URL', value: "${env.RUN_DISPLAY_URL}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_REVOKER', value: "sre-bot"],
+                    [$class: 'StringParameterValue', name: 'ERROR_CODE', value: "0"],
+                    [$class: 'StringParameterValue', name: 'ERROR_SUMMARY', value: ""],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_START_TIME', value: "${taskStartTimeInMillis}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_END_TIME', value: "${taskFinishTimeInMillis}"],
+                    [$class: 'StringParameterValue', name: 'CLONE_CODE_DURATION', value: "${checkout_duration_seconds}"],
+                    [$class: 'StringParameterValue', name: 'COMPILE_DURATION', value: "${compile_duration_seconds}"],
+                    [$class: 'StringParameterValue', name: 'UPLOAD_PACKAGE_DURATION', value: "${upload_duration_seconds}"],
+                    [$class: 'StringParameterValue', name: 'BINARY_DOWNLOAD_URL', value: "${FILE_SERVER_URL}/download/${OUTPUT_BINARY}"],
+            ]
     }
 }
