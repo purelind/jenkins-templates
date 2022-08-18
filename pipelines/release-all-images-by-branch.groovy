@@ -848,7 +848,7 @@ def upload_pipeline_run_data() {
             wait: false,
             parameters: [
                     [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value: "${JOB_NAME}"],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_TYPE', value: "ga build"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_TYPE', value: "nightly image for internal"],
                     [$class: 'StringParameterValue', name: 'STATUS', value: currentBuild.result],
                     [$class: 'StringParameterValue', name: 'JENKINS_BUILD_ID', value: "${BUILD_NUMBER}"],
                     [$class: 'StringParameterValue', name: 'JENKINS_RUN_URL', value: "${env.RUN_DISPLAY_URL}"],
