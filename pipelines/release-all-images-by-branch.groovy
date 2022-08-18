@@ -2,7 +2,7 @@
 * @GIT_BRANCH(string:repo branch, Required)
 * @FORCE_REBUILD(bool:if force rebuild binary,default true,Optional)
 */
-def taskStartTimeInMillis = System.currentTimeMillis()
+
 properties([
         parameters([
                 string(
@@ -39,6 +39,9 @@ properties([
             ''')
         ])
 ])
+
+taskStartTimeInMillis = System.currentTimeMillis()
+taskFinishTimeInMillis = System.currentTimeMillis()
 
 begin_time = new Date().format('yyyy-MM-dd HH:mm:ss')
 ng_monitoring_sha1 = ""
@@ -758,7 +761,7 @@ try {
             ]
     getHash()
     upload_result_to_db()
-
+    upload_pipeline_run_data()
 }
 
 def getHash() {
@@ -836,4 +839,24 @@ def upload_result_to_db() {
                     [$class: 'StringParameterValue', name: 'PUSH_GCR', value: push_gcr]
             ]
 
+}
+
+def upload_pipeline_run_data() {
+    stage("Upload pipeline run data") {
+        taskFinishTimeInMillis = System.currentTimeMillis()
+        build job: 'upload-pipeline-run-data-to-db',
+            wait: false,
+            parameters: [
+                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value: "${JOB_NAME}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_TYPE', value: "ga build"],
+                    [$class: 'StringParameterValue', name: 'STATUS', value: currentBuild.result],
+                    [$class: 'StringParameterValue', name: 'JENKINS_BUILD_ID', value: "${BUILD_NUMBER}"],
+                    [$class: 'StringParameterValue', name: 'JENKINS_RUN_URL', value: "${env.RUN_DISPLAY_URL}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_REVOKER', value: "sre-bot"],
+                    [$class: 'StringParameterValue', name: 'ERROR_CODE', value: "0"],
+                    [$class: 'StringParameterValue', name: 'ERROR_SUMMARY', value: ""],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_START_TIME', value: "${taskStartTimeInMillis}"],
+                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_END_TIME', value: "${taskFinishTimeInMillis}"],
+            ]
+    }
 }
