@@ -136,7 +136,7 @@ if (params.DEBUG) {
 HOTFIX_BUILD_RESULT_FILE = "hotfix_build_result-${REPO}-${HOTFIX_TAG}.json"
 HOTFIX_BUILD_RESULT = [:]
 HOTFIX_BUILD_RESULT["repo"] = REPO
-
+ENTERPRISE_PLUGIN_HASH = ""
 buildMap = [:]
 
 
@@ -367,6 +367,25 @@ def buildOne(repo, product, hash, arch, binary, tag) {
         build job: "build-common",
             wait: true,
             parameters: paramsBuild
+    }
+
+    def tag_tmp = ""
+    if ("${params.HOTFIX_TAG}".startsWith("v")) {
+        tag_tmp = "${params.HOTFIX_TAG}".substring(1, 4)
+    } else {
+        println "Tag version is illegal."
+        sh "exit 1"
+    }
+    def branch = "*/" + "release-" + tag_tmp
+    print("The enterprise plugin branch is ${branch}")
+    checkout([$class: 'GitSCM',
+              branches: [[name: "${branch}"]],
+              extensions: [[$class: 'RelativeTargetDirectory',
+                            relativeTargetDir: 'enterprise-plugin']],
+              userRemoteConfigs: [[credentialsId: 'github-sre-bot',
+                                   url: 'https://github.com/pingcap/enterprise-plugin.git']]])
+    dir("enterprise-plugin"){
+        ENTERPRISE_PLUGIN_HASH = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
     }
 
     def plugin_output_binary = "builds/hotfix/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
