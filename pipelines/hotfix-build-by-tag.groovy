@@ -495,12 +495,6 @@ def pushImageToGCR(harborImage, repo, product, tag) {
 }
 
 def pushImageToDockerhub(harborImage, repo, product, tag) {
-    // 企业版镜像不能 push 到 dockerhub
-    if (params.EDITION == "enterprise") {
-        prntln "skip push image to dockerhub for enterprise edition"
-        println "please check your input parameters"
-        throw new Exception("skip push image to dockerhub for enterprise edition")
-    }
     // 命名规范：
     //- vX.Y.Z-yyyymmdd，举例：v6.1.0-20220524
     def imageTag = "${tag}"
