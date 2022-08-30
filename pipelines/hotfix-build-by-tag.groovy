@@ -145,6 +145,7 @@ def get_sha() {
     return sh(returnStdout: true, script: "python gethash.py -repo=${REPO} -version=${HOTFIX_TAG}").trim()
 }
 
+
 def debugEnv() {
     stage("debug env") {
         echo("env")
@@ -336,6 +337,34 @@ def buildTiupPatch(originalFile, packageName, patchFile, arch) {
     }
 }
 
+def get_enterprise_plugin_hash(tidb_tag) {
+    hotifxBranchReg = /^(v)?(\d+\.\d+)(\.\d+\-.+)?/
+    enterprise_plugin_branch = String.format('release-%s', (tidb_tag =~ hotifxBranchReg)[0][2])
+    println "enterprise_plugin_branch: ${enterprise_plugin_branch}"
+    print("The enterprise plugin branch is ${enterprise_plugin_branch}")
+    dir("enterprise-plugin") {
+        sh "curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/get_hash_from_github.py > gethash.py"
+        ENTERPRISE_PLUGIN_HASH = sh(returnStdout: true, script: "python gethash.py -repo=enterprise-plugin -version=${enterprise_plugin_branch}").trim()
+        if (ENTERPRISE_PLUGIN_HASH.length() == 40) {
+            println "valid commit hash: ${ENTERPRISE_PLUGIN_HASH}"
+        } else {
+            println "invalid commit hash: ${ENTERPRISE_PLUGIN_HASH}"
+            currentBuild.result = "FAILURE"
+            throw new Exception("invalid commit hash: ${ENTERPRISE_PLUGIN_HASH}, Throw to stop pipeline")
+        }
+    }
+    // checkout([$class: 'GitSCM',
+    //           branches: [[name: "${enterprise_plugin_branch}"]],
+    //           extensions: [[$class: 'RelativeTargetDirectory',
+    //                         relativeTargetDir: 'enterprise-plugin']],
+    //           userRemoteConfigs: [[credentialsId: 'github-sre-bot',
+    //                                url: 'https://github.com/pingcap/enterprise-plugin.git']]])
+    // dir("enterprise-plugin") {
+    //     ENTERPRISE_PLUGIN_HASH = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
+    //     println "enterprise_plugin_hash: ${ENTERPRISE_PLUGIN_HASH}" 
+    // }
+}
+
 def buildOne(repo, product, hash, arch, binary, tag) {
     println "build binary ${repo} ${product} ${hash} ${arch}"
     println "binary: ${binary}"
@@ -362,37 +391,17 @@ def buildOne(repo, product, hash, arch, binary, tag) {
         [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
     ]
     println "params: ${paramsBuild}"
-    builds = [:]
-    builds["build-${arch}-${params_product}"] = {
+    def buildsbinary = [:]
+    buildsbinary["build-${arch}-${params_product}"] = {
         build job: "build-common",
             wait: true,
             parameters: paramsBuild
-    }
-
-    def tag_tmp = ""
-    if ("${params.HOTFIX_TAG}".startsWith("v")) {
-        tag_tmp = "${params.HOTFIX_TAG}".substring(1, 4)
-    } else {
-        println "Tag version is illegal."
-        sh "exit 1"
-    }
-    def branch = "*/" + "release-" + tag_tmp
-    print("The enterprise plugin branch is ${branch}")
-    checkout([$class: 'GitSCM',
-              branches: [[name: "${branch}"]],
-              extensions: [[$class: 'RelativeTargetDirectory',
-                            relativeTargetDir: 'enterprise-plugin']],
-              userRemoteConfigs: [[credentialsId: 'github-sre-bot',
-                                   url: 'https://github.com/pingcap/enterprise-plugin.git']]])
-    dir("enterprise-plugin"){
-        ENTERPRISE_PLUGIN_HASH = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
     }
 
     def plugin_output_binary = "builds/hotfix/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
     if (params.DEBUG) { 
         plugin_output_binary = "builds/hotfix-debug/enterprise-plugin/${tag}/${ENTERPRISE_PLUGIN_HASH}/centos7/enterprise-plugin-linux-${arch}.tar.gz"
     }
-
 
     if (product == "tidb" && EDITION == "enterprise") {
         println "build tidb enterprise edition binary"
@@ -412,7 +421,7 @@ def buildOne(repo, product, hash, arch, binary, tag) {
             [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
         ]
         println "params: ${paramsBuildPlugin}"
-        builds["build-${arch}-enterprise-plugin"] = {
+        buildsbinary["build-${arch}-enterprise-plugin"] = {
             build job: "build-common",
                 wait: true,
                 parameters: paramsBuildPlugin
@@ -420,7 +429,7 @@ def buildOne(repo, product, hash, arch, binary, tag) {
 
     }
 
-    parallel builds
+    parallel buildsbinary
 
     def originalFilePath = "${FILE_SERVER_URL}/download/${binary}"
     def patchFilePath = "builds/hotfix/${product}/${tag}/${GIT_HASH}/centos7/${product}-patch-linux-${arch}.tar.gz"
@@ -600,7 +609,6 @@ def buildByTag(repo, tag, packageName) {
     archiveArtifacts artifacts: "${HOTFIX_BUILD_RESULT_FILE}", fingerprint: true
 
     currentBuild.description = "hotfix build ${repo} ${tag} ${GIT_HASH}"
-    // currentBuild.description += "\n"
 }
 
 def notifyToFeishu(buildResultFile) {
@@ -759,19 +767,23 @@ try{
                     throw new Exception("invalid commit hash: ${GIT_HASH}, Throw to stop pipeline")
                 }
                 println "checkout code ${REPO} ${HOTFIX_TAG} ${GIT_HASH}"
+                if (PRODUCT == "tidb" && EDITION == "enterprise" )  {
+                    println "enterprise tidb, need to checkout enterprise code then build plugin"
+                    get_enterprise_plugin_hash(HOTFIX_TAG)
+                }
                 buildByTag(REPO, HOTFIX_TAG, PRODUCT)
                 testImageWithBasicSql(HOTFIX_TAG, PRODUCT)
 
-//                notifyToFeishu(HOTFIX_BUILD_RESULT_FILE)
                 notifyToFeishuNew(HOTFIX_BUILD_RESULT_FILE)
             }
         }
     }
+    }
     currentBuild.result = "SUCCESS"
-}
 }catch (Exception e){
-    println "${e}"
     currentBuild.result = "FAILURE"
+    println "${e}"
+    throw new Exception("${e}")
 }finally{
     upload_result_to_db()
 }
