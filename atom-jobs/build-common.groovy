@@ -875,6 +875,9 @@ def run_with_arm_go_pod(Closure body) {
         case "go1.18":
             arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
             break
+        case "go1.19":
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19-arm64:latest"
+            break
         default:
             println "invalid go version ${goVersion}"
             break
