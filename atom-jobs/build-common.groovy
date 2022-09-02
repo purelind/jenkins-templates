@@ -134,12 +134,15 @@ def ifFileCacheExists() {
 
 // choose which go version to use. 
 def String needUpgradeGoVersion(String tag,String branch) {
-    goVersion="go1.18"
+    goVersion="go1.19"
     if (tag.startsWith("v") && tag <= "v5.1") {
         return "go1.13"
     }
     if (tag.startsWith("v") && tag > "v5.1" && tag < "v6.0") {
         return "go1.16"
+    }
+    if (tag.startsWith("v") && tag >= "v6.0" && tag < "v6.3") {
+        return "go1.18"
     }
     if (branch.startsWith("release-") && branch < "release-5.1"){
         return "go1.13"
@@ -147,20 +150,28 @@ def String needUpgradeGoVersion(String tag,String branch) {
     if (branch.startsWith("release-") && branch >= "release-5.1" && branch < "release-6.0"){
         return "go1.16"
     }
+    if (branch.startsWith("release-") && branch >= "release-6.0" && branch < "release-6.3"){
+        return "go1.18"
+    }
     if (branch.startsWith("hz-poc") || branch.startsWith("arm-dup") ) {
         return "go1.16"
     }
     if (REPO == "tiem") {
         return "go1.16"
     }
-    return "go1.18"
+    return "go1.19"
 }
 
-def goBuildPod = "build_go1185"
-def GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+def goBuildPod = "build_go1190"
+def GO_BIN_PATH = "/usr/local/go1.19/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 // tidb-tools only use branch master and use newest go version
 if (REPO != "tidb-tools") {
+    if (goVersion == "go1.18") {
+        goBuildPod = "build_go1185"
+        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+
+    }
     if (goVersion == "go1.16") {
         goBuildPod = "${GO1160_BUILD_SLAVE}"
         GO_BIN_PATH = "/usr/local/go1.16.4/bin"
@@ -178,7 +189,7 @@ def containerLabel = "golang"
 def binPath = ""
 def useArmPod = false
 if (params.ARCH == "arm64") {
-    GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+    GO_BIN_PATH = "/usr/local/go1.19/bin"
 }
 if (params.ARCH == "arm64" && params.PRODUCT in ["tidb", "enterprise-plugin"]) {
     useArmPod = true
@@ -863,6 +874,9 @@ def run_with_arm_go_pod(Closure body) {
             break
         case "go1.18":
             arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
+            break
+        case "go1.19":
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19-arm64:latest"
             break
         default:
             println "invalid go version ${goVersion}"
