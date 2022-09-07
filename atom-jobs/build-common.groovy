@@ -182,6 +182,14 @@ if (REPO != "tidb-tools") {
         GO_BIN_PATH = "/usr/local/go/bin"
     }
 }
+// workaround for v 5.3.3 tidb-tools,
+// need use go1.18.5 to build tidb-tools
+// revert this after  v5.3.3 ga
+if (REPO == "tidb-tools" && RELEASE_TAG == "v5.3.3" && GIT_HASH == "cf6b7a8ae4b5849a6155634352b3712059defb48") {
+        goBuildPod = "build_go1185"
+        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+        println "tidb-tools v5.3.3 use go1.18.5 to build"
+}
 
 // choose which node to use.
 def nodeLabel = goBuildPod
