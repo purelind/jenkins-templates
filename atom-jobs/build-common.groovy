@@ -1,3 +1,5 @@
+
+
 /*
 * @OUTPUT_BINARY(string:binary url on fileserver, transfer througth atom jobs,Required)
 * @REPO(string:repo name,eg tidb, Required)
@@ -16,35 +18,26 @@
 
 properties([
         parameters([
-                choice(
-                        choices: ['arm64', 'amd64'],
-                        name: 'ARCH'
-                ),
-                choice(
-                        choices: ['linux', 'darwin'],
-                        name: 'OS'
-                ),
-                choice(
-                        choices: ['community', 'enterprise'],
-                        name: 'EDITION'
-                ),
+                choice(choices: ['arm64', 'amd64'],name: 'ARCH'),
+                choice(choices: ['linux', 'darwin'],name: 'OS'),
+                choice(choices: ['community', 'enterprise'],name: 'EDITION'),
                 string(
-                        defaultValue: '',
+                        defaultValue: 'builds/debug-to-delete/tidb/62480cf19b4d7f6821f82c9cee272c096e9fec52/centos7/tidb-linux-amd64.tar.gz',
                         name: 'OUTPUT_BINARY',
                         trim: true
                 ),
                 string(
-                        defaultValue: '',
+                        defaultValue: 'tidb',
                         name: 'REPO',
                         trim: true
                 ),
                 string(
-                        defaultValue: '',
+                        defaultValue: 'tidb',
                         name: 'PRODUCT',
                         trim: true,
                 ),
                 string(
-                        defaultValue: '',
+                        defaultValue: '62480cf19b4d7f6821f82c9cee272c096e9fec52',
                         name: 'GIT_HASH',
                         trim: true
                 ),
@@ -54,13 +47,13 @@ properties([
                         trim: true
                 ),
                 string(
-                        defaultValue: '',
+                        defaultValue: 'v6.3.0-alpha',
                         name: 'RELEASE_TAG',
                         trim: true
                 ),
                 string(
-                        defaultValue: '',
-                        name: 'TARGET_BRANCH',
+                        defaultValue: 'master',
+                        name: 'TARGET_BRANCH', 
                         trim: true
                 ),
                 string(
@@ -68,47 +61,17 @@ properties([
                         name: 'TIDB_HASH',
                         trim: true
                 ),
-                booleanParam(
-                        defaultValue: true,
-                        name: 'FORCE_REBUILD'
-                ),
-                booleanParam(
-                        name: 'FAILPOINT',
-                        defaultValue: false
-                ),
-                booleanParam(
-                        name: 'NEED_SOURCE_CODE',
-                        defaultValue: false
-                ),
                 string(
                         defaultValue: '',
                         name: 'USE_TIFLASH_RUST_CACHE',
                         trim: true                        
                 ),
-                booleanParam(
-                        name: 'TIFLASH_DEBUG',
-                        defaultValue: false
-                ),
+                booleanParam(name: 'FORCE_REBUILD', defaultValue: true),
+                booleanParam(name: 'FAILPOINT',defaultValue: false),
+                booleanParam(name: 'NEED_SOURCE_CODE',defaultValue: false),
+                booleanParam(name: 'TIFLASH_DEBUG',defaultValue: false),
     ])
 ])
-
-taskStartTimeInMillis = System.currentTimeMillis()
-taskFinishTimeInMillis = System.currentTimeMillis()
-checkoutStartTimeInMillis = System.currentTimeMillis()
-checkoutFinishTimeInMillis = System.currentTimeMillis()
-compileStartTimeInMillis = System.currentTimeMillis()
-compileFinishTimeInMillis = System.currentTimeMillis()
-uploadStartTimeInMillis = System.currentTimeMillis()
-uploadFinishTimeInMillis = System.currentTimeMillis()
-
-if (params.PRODUCT.length() <= 1) {
-    PRODUCT = REPO
-}
-
-failpoint = "false"
-if (params.FAILPOINT) {
-    failpoint = "true"
-}
 
 
 // check if binary already has been built. 
@@ -125,15 +88,271 @@ def ifFileCacheExists() {
     return false
 }
 
-// support branch example
-//  master | hz-poc
-//  relase-4.0
-//  release-4.0-20210812
-//  release-5.1
-//  release-5.3
+def get_repo_git_ssh_url(repo) {
+    def url = "git@github.com:pingcap/${repo}.git"
+    if (repo == "tikv" || repo == "importer" || repo == "pd") {
+        url = "git@github.com:tikv/${repo}.git"
+    }
+    if (repo == "tiem") {
+        url = "git@github.com:pingcap-inc/${repo}.git"
+    }
+    return url
+}
+
+def get_golang_build_pod_params(goversion, arch) {
+    def pod_params = [:]
+    def pod_image = ""
+    def request_cpu = "4000m"
+    def request_memory = "8Gi"
+    def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+    def namespace = "jenkins-cd"
+    def cluster_name = "kubernetes"
+
+    if (arch == "arm64") {
+        cluster_name = "kubernetes-arm64"
+        jnlp_image = "hub.pingcap.net/jenkins/jnlp-slave-arm64:latest"
+        switch(goversion) {
+            case "go1.13":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13-arm64:latest"
+                break
+            case "go1.16":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16-arm64:latest"
+                break 
+            case "go1.18":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
+                break
+            case "go1.19":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19-arm64:latest"
+                break
+            default:
+                println "Unknown go version: ${goversion}"
+                throw new Exception("Unknown go version: ${goversion}")         
+        }
+    } else {
+        switch(goversion) {
+            case "go1.13":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13:cached"
+                break
+            case "go1.16":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16:latest"
+                break 
+            case "go1.18": 
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5:latest"
+                break
+            case "go1.19":
+                pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19:latest"
+                break
+            default:
+                println "Unknown go version: ${goversion}"
+                throw new Exception("Unknown go version: ${goversion}")         
+        }
+    }
+
+    pod_params["pod_image"] = pod_image
+    pod_params["request_cpu"] = request_cpu
+    pod_params["request_memory"] = request_memory
+    pod_params["jnlp_image"] = jnlp_image
+    pod_params["namespace"] = namespace
+    pod_params["cluster_name"] = cluster_name
+    return pod_params
+
+}
+
+def get_rust_build_pod_params(product, arch) {
+    def pod_params = [:]
+    def pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13_rust:latest"
+    def request_cpu = "8000m"
+    def request_memory = "20Gi"
+    def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+    def namespace = "jenkins-cd"
+    def cluster_name = "kubernetes"
+
+    if (arch == "arm64") {
+        cluster_name = "kubernetes-arm64"
+        jnlp_image = "hub.pingcap.net/jenkins/jnlp-slave-arm64:latest"
+        pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13_rust-arm64:latest"
+    }
+
+    pod_params["pod_image"] = pod_image
+    pod_params["request_cpu"] = request_cpu
+    pod_params["request_memory"] = request_memory
+    pod_params["jnlp_image"] = jnlp_image
+    pod_params["namespace"] = namespace
+    pod_params["cluster_name"] = cluster_name
+    return pod_params
+}
+
+
+// linux amd64
+// normal : hub.pingcap.net/tiflash/tiflash-builder:latest
+// llvm : hub.pingcap.net/tiflash/tiflash-llvm-base:amd64
+// llvm org : hub.pingcap.net/tiflash/tiflash-llvm-base:amd64-llvmorg-14.0.6
+// linux arm64
+// normal : hub.pingcap.net/tiflash/tiflash-builder:arm64
+// llvm : hub.pingcap.net/tiflash/tiflash-llvm-base:aarch64
+// llvm org : hub.pingcap.net/tiflash/tiflash-llvm-base:aarch64-llvmorg-14.0.6
+def get_tiflash_image(os, arch) {
+    def image_map = [
+        "linux-amd64": "hub.pingcap.net/tiflash/tiflash-builder:latest",
+        "linux-amd64-llvm": "hub.pingcap.net/tiflash/tiflash-llvm-base:amd64",
+        "linux-amd64-llvmorg": "hub.pingcap.net/tiflash/tiflash-llvm-base:amd64-llvmorg-14.0.6",
+        "linux-arm64": "hub.pingcap.net/tiflash/tiflash-builder:arm64",
+        "linux-arm64-llvm": "hub.pingcap.net/tiflash/tiflash-llvm-base:aarch64",
+        "linux-arm64-llvmorg": "hub.pingcap.net/tiflash/tiflash-llvm-base:aarch64-llvmorg-14.0.6"
+    ]
+        
+    def image_type = "${os}-${arch}"
+    if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
+        image_type = "${os}-${arch}-llvm"
+        def image_tag_suffix = ""
+        if (fileExists(".toolchain.yml")) {
+            def config = readYaml(file: ".toolchain.yml")
+            image_tag_suffix = config.image_tag_suffix
+            if (image_tag_suffix == "llvmorg.14.0.6") {
+                image_type = "${os}-${arch}-llvmorg"
+            } else {
+                println "unknown image_tag_suffix: ${image_tag_suffix}"
+                println "current support build image : ${image_map}"
+                throw new Error("unknown image_tag_suffix: ${image_tag_suffix}")
+            }
+        }
+    }
+    
+    return image_map[image_type]  
+}
+
+def get_tiflash_build_pod_params(arch) {
+        def pod_params = [:]
+        def pod_image = get_tiflash_image("linux", arch)
+        def request_cpu = "10000m"
+        def request_memory = "20Gi"
+        def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+        def namespace = "jenkins-cd"
+        def cluster_name = "kubernetes"
+
+        if (arch == "arm64") {
+            cluster_name = "kubernetes-arm64"
+            jnlp_image = "hub.pingcap.net/jenkins/jnlp-slave-arm64:latest"
+        }
+
+        pod_params["pod_image"] = pod_image
+        pod_params["request_cpu"] = request_cpu
+        pod_params["request_memory"] = request_memory
+        pod_params["jnlp_image"] = jnlp_image
+        pod_params["namespace"] = namespace
+        pod_params["cluster_name"] = cluster_name
+        return pod_params
+}
+
+def use_baremetal_agent(os) {
+    if (os == "darwin") {
+        return true
+    }
+    return false
+}
+
+def get_baremetal_agent_node(os, arch, product) {
+    def node_label = "mac"
+    if(os == "darwin" && arch == "arm64") {
+        node_label = "mac-arm"
+    }
+    if (os == "darwin" && arch == "amd64") {
+        node_label = "mac"
+    }
+    if (os == "darwin" && arch == "arm64" && product in ["tics", "tiflash"]) {
+        node_label = "mac-arm-tiflash"
+    }
+    return node_label
+}
+
+def set_go_bin_path(goversion) {
+    def go_bin_path = ""
+    switch (goversion) {
+        case "go1.13":
+            go_bin_path = "/usr/local/go/bin"
+            break
+        case "go1.16":
+            go_bin_path = "/usr/local/go1.16.4/bin"
+            break
+        case "go1.18":
+            go_bin_path = "/usr/local/go1.18.5/bin"
+            break
+        case "go1.19":
+            go_bin_path = "/usr/local/go1.19/bin"
+            break
+        default:
+            println "Unknown go version: ${goversion}"
+            throw new Exception("Unknown go version: ${goversion}")         
+    }
+    return go_bin_path
+}
+
+def set_bin_path(go_bin_path, os, arch) {
+    def bin_path = ""
+    if (os == "darwin" && arch == "amd64") {
+        bin_path = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${go_bin_path}:/usr/local/opt/binutils/bin/"
+    }
+    if (os == "darwin" && arch == "arm64") {
+        bin_path = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${go_bin_path}:/usr/local/opt/binutils/bin/"
+    }
+    return bin_path
+}
+
+def checkoutCode() {
+    def repoDailyCache = "/nfs/cache/git/src-${REPO}.tar.gz"
+    if (fileExists(repoDailyCache)) {
+        println "get code from nfs to reduce clone time"
+        sh """
+        cp -R ${repoDailyCache}  ./
+        tar -xzf ${repoDailyCache} --strip-components=1
+        rm -f src-${REPO}.tar.gz
+        """
+        sh "chown -R 1000:1000 ./"
+    } else {
+        def codeCacheInFileserverUrl = "${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-${REPO}.tar.gz"
+        def cacheExisted = sh(returnStatus: true, script: """
+            if curl --output /dev/null --silent --head --fail ${codeCacheInFileserverUrl}; then exit 0; else exit 1; fi
+            """)
+        if (cacheExisted == 0) {
+            println "get code from fileserver to reduce clone time"
+            println "codeCacheInFileserverUrl=${codeCacheInFileserverUrl}"
+            sh """
+            curl -O ${codeCacheInFileserverUrl}
+            tar -xzf src-${REPO}.tar.gz --strip-components=1
+            rm -f src-${REPO}.tar.gz
+            """
+            sh "chown -R 1000:1000 ./"
+        } else {
+            println "get code from github"
+        }
+    }
+    def specRef = "+refs/heads/*:refs/remotes/origin/*"
+    if (params.GIT_PR.length() >= 1) {
+    specRef = "+refs/pull/${GIT_PR}/*:refs/remotes/origin/pr/${GIT_PR}/*"
+    }
+    def repo_git_url = "git@github.com:pingcap/${REPO}.git"
+    if (REPO == "tikv" || REPO == "importer" || REPO == "pd") {
+        repo_git_url = "git@github.com:tikv/${REPO}.git"
+    }
+    if (REPO == "tiem") {
+        repo_git_url = "git@github.com:pingcap-inc/${REPO}.git"
+    }
+    println "specRef: ${specRef}"
+    sh "git version"
+    checkout changelog: false, poll: true,
+                    scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
+                        extensions: [[$class: 'CheckoutOption', timeout: 30],
+                                    [$class: 'CloneOption', timeout: 60],
+                                    [$class: 'PruneStaleBranch'],
+                                    [$class: 'SubmoduleOption', timeout: 30, disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
+                                    [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
+                        userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
+                                            refspec      : specRef,
+                                            url          : repo_git_url]]]
+}
 
 // choose which go version to use. 
-def String needUpgradeGoVersion(String tag,String branch) {
+def String select_go_version(String tag,String branch) {
     goVersion="go1.19"
     if (tag.startsWith("v") && tag <= "v5.1") {
         return "go1.13"
@@ -162,134 +381,64 @@ def String needUpgradeGoVersion(String tag,String branch) {
     return "go1.19"
 }
 
-def goBuildPod = "build_go1190"
-def GO_BIN_PATH = "/usr/local/go1.19/bin"
-goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
-// tidb-tools only use branch master and use newest go version
-if (REPO != "tidb-tools") {
-    if (goVersion == "go1.18") {
-        goBuildPod = "build_go1185"
-        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
-
-    }
-    if (goVersion == "go1.16") {
-        goBuildPod = "${GO1160_BUILD_SLAVE}"
-        GO_BIN_PATH = "/usr/local/go1.16.4/bin"
-
-    }
-    if (goVersion == "go1.13") {
-        goBuildPod = "${GO_BUILD_SLAVE}"
-        GO_BIN_PATH = "/usr/local/go/bin"
-    }
-}
-// workaround for v 5.3.3 tidb-tools,
-// need use go1.18.5 to build tidb-tools
-// revert this after  v5.3.3 ga
-if (REPO == "tidb-tools" && RELEASE_TAG == "v5.3.3" && GIT_HASH == "cf6b7a8ae4b5849a6155634352b3712059defb48") {
-        goBuildPod = "build_go1185"
-        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
-        println "tidb-tools v5.3.3 use go1.18.5 to build"
-}
-
-// choose which node to use.
-def nodeLabel = goBuildPod
-def containerLabel = "golang"
-def binPath = ""
-def useArmPod = false
-
-if (params.ARCH == "arm64" && params.PRODUCT in ["tidb", "enterprise-plugin"]) {
-    useArmPod = true
-}
-if (params.PRODUCT == "tikv" || params.PRODUCT == "importer") {
-    nodeLabel = "build"
-    containerLabel = "rust"
-} 
-if (params.PRODUCT == "tics") {
-    nodeLabel = "build_tiflash"
-    containerLabel = "tiflash"
-} 
-if (params.ARCH == "arm64" && params.OS == "linux" && !useArmPod) {
-    binPath = "/usr/local/node/bin:/root/.cargo/bin:/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:${GO_BIN_PATH}"
-    nodeLabel = "arm"
-    containerLabel = ""
-    if (params.PRODUCT == "tics"){
-        nodeLabel = "tiflash_build_arm"
-        containerLabel = "tiflash"
-    }
-}
-if (params.OS == "darwin" && params.ARCH == "amd64") {
-    binPath = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${GO_BIN_PATH}:/usr/local/opt/binutils/bin/"
-    nodeLabel = "mac"
-    containerLabel = ""
-}
-
-if (params.OS == "darwin" && params.ARCH == "arm64") {
-    binPath = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${GO_BIN_PATH}:/usr/local/opt/binutils/bin/"
-    nodeLabel = "mac-arm"
-    containerLabel = ""
-    if (params.PRODUCT == "tics"){
-        nodeLabel = "mac-arm-tiflash"
-    }
-}
-
-// define git url and git ref.
-repo = "git@github.com:pingcap/${REPO}.git"
-if (REPO == "tikv" || REPO == "importer" || REPO == "pd") {
-    repo = "git@github.com:tikv/${REPO}.git"
-}
-if (REPO == "tiem") {
-    repo = "git@github.com:pingcap-inc/${REPO}.git"
-}
-specRef = "+refs/heads/*:refs/remotes/origin/*"
-if (params.GIT_PR.length() >= 1) {
-   specRef = "+refs/pull/${GIT_PR}/*:refs/remotes/origin/pr/${GIT_PR}/*"
-}
-def checkoutCode() {
-    def repoDailyCache = "/nfs/cache/git/src-${REPO}.tar.gz"
-    if (fileExists(repoDailyCache)) {
-        println "get code from nfs to reduce clone time"
+def package_binary() {
+    // 是否和代码一起打包，可以手动设置 NEED_SOURCE_CODE=true
+    if (params.NEED_SOURCE_CODE) {
         sh """
-        cp -R ${repoDailyCache}  ./
-        tar -xzf ${repoDailyCache} --strip-components=1
-        rm -f src-${REPO}.tar.gz
+        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
+        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
         """
-        sh "chown -R 1000:1000 ./"
+    //  pd,tidb,tidb-test 非release版本，和代码一起打包
+    } else if ((PRODUCT == "pd" || PRODUCT == "tidb" || PRODUCT == "tidb-test" ) && RELEASE_TAG.length() < 1) {
+        sh """
+        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
+        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
+        """
+    } else if (PRODUCT == "tiem") {
+        sh """
+        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
+        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
+        """
     } else {
-        def codeCacheInFileserverUrl = "${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-${REPO}.tar.gz"
-        def cacheExisted = sh(returnStatus: true, script: """
-            if curl --output /dev/null --silent --head --fail ${codeCacheInFileserverUrl}; then exit 0; else exit 1; fi
-            """)
-        if (cacheExisted == 0) {
-            println "get code from fileserver to reduce clone time"
-            println "codeCacheInFileserverUrl=${codeCacheInFileserverUrl}"
-            sh """
-            curl -O ${codeCacheInFileserverUrl}
-            tar -xzf src-${REPO}.tar.gz --strip-components=1
-            rm -f src-${REPO}.tar.gz
-            """
-        } else {
-            println "get code from github"
-        }
+        sh """
+        cd ${TARGET}
+        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
+        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
+        """
     }
-    checkout changelog: false, poll: true,
-                    scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
-                        extensions: [[$class: 'CheckoutOption', timeout: 30],
-                                    [$class: 'CloneOption', timeout: 60],
-                                    [$class: 'PruneStaleBranch'],
-                                    [$class: 'SubmoduleOption', timeout: 30, disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
-                                    [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
-                        userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
-                                            refspec      : specRef,
-                                            url          : repo]]]
-    sh "git checkout ${GIT_HASH}"
 }
 
+def start_work() {
+    checkoutCode()
+    withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
+        compileStartTimeInMillis = System.currentTimeMillis()
+        sh buildsh[product]
+        compileFinishTimeInMillis = System.currentTimeMillis()
+    }
+    uploadStartTimeInMillis = System.currentTimeMillis()
+    package_binary()
+    uploadFinishTimeInMillis = System.currentTimeMillis()
+}
+
+goVersion = select_go_version(params.RELEASE_TAG,params.TARGET_BRANCH)
+goBinPath = set_go_bin_path(goVersion)
+println "go bin path: ${goBinPath}"
+if (goBinPath == "") {
+    println "go version ${goVersion} not found"
+    throw new Exception("go version ${goVersion} not found")
+}
+def binPath = set_bin_path(goBinPath, params.OS, params.ARCH)
+println "binPath: ${binPath}"
+
+
+product_go_array = ["tidb", "pd", "tidb-binlog", "tidb-tools", "ticdc", "dm", "br", "dumpling", "ng-monitoring", "tidb-enterprise-tools", "monitoring", "tidb-test", "enterprise-plugin"]
+product_rust_array = []
 
 // define build script here.
 TARGET = "output" 
 buildsh = [:]
 buildsh["tidb-ctl"] = """
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -347,6 +496,39 @@ cp binarys/tidb-ctl ${TARGET}/bin/ || true
 cp bin/* ${TARGET}/bin/ 
 """
 
+buildsh["enterprise-plugin"] = """
+if [ "${OS}" == 'darwin' ]; then
+    export PATH=${binPath}
+fi;
+go version
+cd ../
+rm -rf tidb
+curl -O ${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-tidb.tar.gz
+tar -xf src-tidb.tar.gz
+cd tidb
+git fetch --all
+git reset --hard ${TIDB_HASH}
+cd cmd/pluginpkg
+go build 
+cd ../../../enterprise-plugin
+cd whitelist
+go mod tidy
+cd ..
+../tidb/cmd/pluginpkg/pluginpkg -pkg-dir whitelist -out-dir whitelist
+md5sum whitelist/whitelist-1.so > whitelist/whitelist-1.so.md5
+cd audit
+go mod tidy
+cd ..
+../tidb/cmd/pluginpkg/pluginpkg -pkg-dir audit -out-dir audit
+md5sum audit/audit-1.so > audit/audit-1.so.md5
+rm -rf ${TARGET}
+mkdir -p ${TARGET}/bin
+cp whitelist/whitelist-1.so.md5 ${TARGET}/bin
+cp whitelist/whitelist-1.so ${TARGET}/bin
+cp audit/audit-1.so.md5 ${TARGET}/bin
+cp audit/audit-1.so ${TARGET}/bin
+"""
+
 buildsh["tidb-binlog"] = """
 if [ ${RELEASE_TAG}x != ''x ];then
     for a in \$(git tag --contains ${GIT_HASH}); do echo \$a && git tag -d \$a;done
@@ -354,7 +536,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -373,7 +555,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -398,7 +580,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -416,7 +598,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -450,10 +632,9 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
-
 go version
 if [ ${dmUseWebUI} == "true" ]; then
     wget http://fileserver.pingcap.net/download/ee-tools/${dmNodePackage}.tar.gz
@@ -465,12 +646,10 @@ if [ ${dmUseWebUI} == "true" ]; then
 else
     make dm
 fi;
-
 ls -alh bin/
 rm -rf ${TARGET}
 mkdir -p ${TARGET}/bin
 mkdir -p ${TARGET}/conf  
-
 if [[ -d "dm/dm" ]]; then
     mv dm/dm/master/task_basic.yaml ${TARGET}/conf/
     mv dm/dm/master/task_advanced.yaml ${TARGET}/conf/
@@ -483,7 +662,6 @@ else
     mv dm/worker/dm-worker.toml ${TARGET}/conf/
 fi;
 mv LICENSE ${TARGET}/
-
 # start from v6.0.0(include v6.0.0), dm-ansible is removed, link https://github.com/pingcap/tiflow/pull/4917
 # dm-master and dm-worker tiup package also need those config file even for version >=6.0.0
 #  1. dm-master/conf/dm_worker.rules.yml
@@ -514,7 +692,6 @@ if [[ -d "dm/dm/dm-ansible" ]]; then
     cd ..
     mv dm/monitoring ${TARGET}/
 fi;
-
 if [[ ${ARCH} == "amd64" ]]; then
     curl http://download.pingcap.org/mydumper-latest-linux-amd64.tar.gz | tar xz
     mv mydumper-latest-linux-amd64/bin/mydumper bin/ && rm -rf mydumper-latest-linux-amd64
@@ -529,7 +706,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -553,7 +730,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -574,7 +751,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -591,7 +768,7 @@ if [ ${RELEASE_TAG}x != ''x ];then
     git branch -D refs/tags/${RELEASE_TAG} || true
     git checkout -b refs/tags/${RELEASE_TAG}
 fi;
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -622,7 +799,7 @@ if [ ${OS} == 'darwin' ]; then
         cd tics
     fi
     export PROTOC=/usr/local/bin/protoc
-    export PATH=/usr/local/opt/binutils/bin:/usr/local/bin:/Users/pingcap/.cargo/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${GO_BIN_PATH}
+    export PATH=/usr/local/opt/binutils/bin:/usr/local/bin:/Users/pingcap/.cargo/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${goBinPath}
     mkdir -p release-darwin/build/
     [ -f "release-darwin/build/build-release.sh" ] || curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiflash/build-release.sh > release-darwin/build/build-release.sh
     [ -f "release-darwin/build/build-cluster-manager.sh" ] || curl -s ${FILE_SERVER_URL}/download/builds/pingcap/ee/tiflash/build-cluster-manager.sh > release-darwin/build/build-cluster-manager.sh
@@ -646,7 +823,6 @@ else
         rm -rf ~/.cargo/git/db && ln -s /rust/git/db ~/.cargo/git/db
         rm -rf ~/.cargo/git/checkouts && ln -s /rust/git/checkouts ~/.cargo/git/checkouts
     fi
-
     # check if LLVM toolchain is provided
     echo "the new parameter of tiflash debug is : ${params.TIFLASH_DEBUG}"
     
@@ -726,7 +902,7 @@ cp target/release/tikv-importer ${TARGET}/bin
 // NOTE: remove param --auto-push for pull-monitoring 
 //      we don't want to auto create pull request in repo https://github.com/pingcap/monitoring/pulls
 buildsh["monitoring"] = """
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go build -o pull-monitoring  cmd/monitoring.go
@@ -737,7 +913,7 @@ mv monitor-snapshot/${RELEASE_TAG}/operator/* ${TARGET}
 """
 
 buildsh["tiem"] = """
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -745,7 +921,7 @@ make build
 """
 
 buildsh["tidb-test"] = """
-if [[ ${ARCH} == 'arm64' ||  ${OS} == 'darwin' ]]; then
+if [[ ${OS} == 'darwin' ]]; then
     export PATH=${binPath}
 fi;
 go version
@@ -799,194 +975,86 @@ cp audit/audit-1.so.md5 ${TARGET}/bin
 cp audit/audit-1.so ${TARGET}/bin
 """
 
-def packageBinary() {
-    // 是否和代码一起打包，可以手动设置 NEED_SOURCE_CODE=true
-    if (params.NEED_SOURCE_CODE) {
-        sh """
-        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
-        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
-        """
-    //  pd,tidb,tidb-test 非release版本，和代码一起打包
-    } else if ((PRODUCT == "pd" || PRODUCT == "tidb" || PRODUCT == "tidb-test" ) && RELEASE_TAG.length() < 1) {
-        sh """
-        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
-        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
-        """
-    } else if (PRODUCT == "tiem") {
-        sh """
-        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
-        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
-        """
-    } else {
-        sh """
-        cd ${TARGET}
-        tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
-        curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
-        """
-    }
-}
 
-def release(product, label) {
-    // if has built,skip build.
-    if (ifFileCacheExists()) {
-        return
-    }
+podTemplateYAML = '''
+apiVersion: v1
+kind: Pod
+spec:
+  env:
+    - name: NODE_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP
+''' 
 
-    checkoutStartTimeInMillis = System.currentTimeMillis()
-    checkoutCode()
-    checkoutFinishTimeInMillis = System.currentTimeMillis()
 
-    if (PRODUCT == 'tics') {
-        if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
-            def image_tag_suffix = ""
-            if (fileExists(".toolchain.yml")) {
-                def config = readYaml(file: ".toolchain.yml")
-                image_tag_suffix = config.image_tag_suffix
+podTemplate(label: "${JOB_NAME}-${BUILD_NUMBER}", 
+    namespace: "jenkins-cd", 
+    cloud: "kubernetes",
+    containers: [
+        containerTemplate(name: 'golang', image: "hub.pingcap.net/jenkins/centos7_golang-1.19:latest", 
+            ttyEnabled: true, command: '/bin/sh -c', args: 'cat',
+            resourceRequestCpu: "1000m", resourceRequestMemory: "2Gi",
+            envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
+        )
+    ]){
+    node("${JOB_NAME}-${BUILD_NUMBER}") {
+    container("golang") {
+        stage("build ${PRODUCT}-${OS}-${ARCH}") {
+            if (ifFileCacheExists()) {
+                return
             }
-            label = "tiflash-llvm${image_tag_suffix}".replaceAll('\\.', '-')
-        }
-    }
-
-    if (label != '') {
-        container(label) {
-            withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
-                compileStartTimeInMillis = System.currentTimeMillis()
-                sh buildsh[product]
-                compileFinishTimeInMillis = System.currentTimeMillis()
-            }
-            uploadStartTimeInMillis = System.currentTimeMillis()
-            packageBinary()
-            uploadFinishTimeInMillis = System.currentTimeMillis()
-        }
-    } else {
-        withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
-            compileStartTimeInMillis = System.currentTimeMillis()
-            sh buildsh[product]
-            compileFinishTimeInMillis = System.currentTimeMillis()
-        }
-        uploadStartTimeInMillis = System.currentTimeMillis()
-        packageBinary()
-        uploadFinishTimeInMillis = System.currentTimeMillis()
-    }
-}
-
-def run_with_arm_go_pod(Closure body) {
-    switch(goVersion) {
-        case "go1.13":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13-arm64:latest"
-            break
-        case "go1.16":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16-arm64:latest"
-            break
-        case "go1.18":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
-            break
-        case "go1.19":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19-arm64:latest"
-            break
-        default:
-            println "invalid go version ${goVersion}"
-            break
-    }
-    def cloud = "kubernetes-arm64"
-    def label = "${JOB_NAME}-${BUILD_NUMBER}"
-    def namespace = "jenkins-cd"
-    def jnlp_docker_image = "hub.pingcap.net/jenkins/jnlp-slave-arm64:latest"
-    podTemplate(label: label,
-            cloud: cloud,
-            namespace: namespace,
-            containers: [
-                    containerTemplate(
-                            name: 'golang', alwaysPullImage: true,
-                            image: "${arm_go_pod_image}", ttyEnabled: true,
-                            resourceRequestCpu: '4000m', resourceRequestMemory: '8Gi',
-                            command: '/bin/sh -c', args: 'cat',
+            if (use_baremetal_agent(OS)) {
+                // darwin mac build use baremetal agent
+                def nodeLabel = get_baremetal_agent_node(params.OS, params.ARCH, params.PRODUCT)
+                println "use baremeta agent: ${nodeLabel}"
+                node(nodeLabel) {
+                    start_work()
+                }
+            } else {
+                // linux build use k8s agent
+                if (product in product_go_array) {
+                    pod_params = get_golang_build_pod_params(goVersion, ARCH)
+                    println "pod_params: ${pod_params}"
+                } else if (product in ["tiflash", "tics"]) {
+                    // tiflash need checkout code first to select pod image against some files
+                    // so we need to checkout code before podTemplateYAML
+                    checkoutCode()
+                    pod_params = get_tiflash_build_pod_params(ARCH)
+                } else {
+                    pod_params = get_rust_build_pod_params(product, ARCH)
+                }
+                println "${pod_params.jnlp_image}"
+                def label = "${JOB_NAME}-${PRODUCT}-${BUILD_NUMBER}"
+                podTemplate(label: label, 
+                    namespace: "${pod_params.namespace}", 
+                    cloud: "${pod_params.cluster_name}",
+                    yaml: podTemplateYAML,
+                    yamlMergeStrategy: merge(),
+                    containers: [
+                        containerTemplate(name: 'jnlp', image: "${pod_params.jnlp_image}",
+                            alwaysPullImage: false, resourceRequestCpu: '100m', resourceRequestMemory: '256Mi',
+                        ),
+                        containerTemplate(name: 'build', image: "${pod_params.pod_image}", 
+                            ttyEnabled: true, command: '/bin/sh -c', args: 'cat',
+                            resourceRequestCpu: "${pod_params.request_cpu}",
+                            resourceRequestMemory: "${pod_params.request_memory}",
                             envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
-                            
-                    ),
-                    containerTemplate(
-                        name: 'jnlp', image: jnlp_docker_image, alwaysPullImage: false,
-                        resourceRequestCpu: '100m', resourceRequestMemory: '256Mi',
-                    )
-            ],
-            volumes: [
-                    emptyDirVolume(mountPath: '/tmp', memory: false),
-                    emptyDirVolume(mountPath: '/home/jenkins', memory: false)
-                    ],
-    ) {
-        node(label) {
-            println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
-            body()
-        }
-    }
-}
-
-try {
-    stage("Build ${PRODUCT}") {
-        if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64" &&  params.OS == "linux") {
-            run_with_arm_go_pod{
-                dir("go/src/github.com/pingcap/${PRODUCT}") {
-                    deleteDir()
-                    release(PRODUCT, containerLabel)
-                }
-            }
-        } else {
-            node(nodeLabel) {
-                dir("go/src/github.com/pingcap/${PRODUCT}") {
-                    deleteDir()
-                    release(PRODUCT, containerLabel)
+                        )
+                    ], 
+                    volumes: [
+                        emptyDirVolume(mountPath: '/tmp', memory: false),
+                        emptyDirVolume(mountPath: '/go', memory: false)
+                    ]) {
+                        node(label) {
+                            container("build") {
+                                start_work()
+                            }
+                        }
                 }
             }
         }
     }
-    currentBuild.result = "SUCCESS"
-} catch (e) {
-    println "error: ${e}"
-    currentBuild.result = "FAILURE"
-    throw e
-} finally {
-    println "done"
-    def repo_owner = "pingcap"
-    if (REPO == "tikv" || REPO == "importer" || REPO == "pd") {
-        repo_owner = "tikv"
-    }
-    stage("Upload pipeline run data") {
-        taskFinishTimeInMillis = System.currentTimeMillis()
-        compile_duration = compileFinishTimeInMillis - compileStartTimeInMillis
-        compile_duration_seconds = compile_duration / 1000
-        checkout_duration = checkoutFinishTimeInMillis - checkoutStartTimeInMillis
-        checkout_duration_seconds = checkout_duration / 1000
-        upload_duration = uploadFinishTimeInMillis - uploadStartTimeInMillis
-        upload_duration_seconds = upload_duration / 1000
-
-        build job: 'upload-build-common-data-to-db',
-            wait: false,
-            parameters: [
-                    [$class: 'StringParameterValue', name: 'PIPELINE_NAME', value: "${JOB_NAME}"],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_TYPE', value: "build binary"],
-                    [$class: 'StringParameterValue', name: 'STATUS', value: currentBuild.result],
-                    [$class: 'StringParameterValue', name: 'OWNER', value: repo_owner],
-                    [$class: 'StringParameterValue', name: 'REPO', value: "${REPO}"],
-                    [$class: 'StringParameterValue', name: 'PRODUCT', value: "${PRODUCT}"],
-                    [$class: 'StringParameterValue', name: 'BRANCH', value: "${TARGET_BRANCH}"],
-                    [$class: 'StringParameterValue', name: 'PR_NUMBER', value: "${GIT_PR}"],
-                    [$class: 'StringParameterValue', name: 'COMMIT_ID', value: "${GIT_HASH}"],
-                    [$class: 'StringParameterValue', name: 'RELEASE_TAG', value: "${RELEASE_TAG}"],
-                    [$class: 'StringParameterValue', name: 'OS_ARCH', value: "${OS}-${ARCH}"],
-                    [$class: 'StringParameterValue', name: 'EDITION', value: "${EDITION}"],
-                    [$class: 'StringParameterValue', name: 'FORCE_REBUILD', value: "${FORCE_REBUILD}"],
-                    [$class: 'StringParameterValue', name: 'NEED_SOURCE_CODE', value: "${NEED_SOURCE_CODE}"],
-                    [$class: 'StringParameterValue', name: 'JENKINS_BUILD_ID', value: "${BUILD_NUMBER}"],
-                    [$class: 'StringParameterValue', name: 'JENKINS_RUN_URL', value: "${env.RUN_DISPLAY_URL}"],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_REVOKER', value: "sre-bot"],
-                    [$class: 'StringParameterValue', name: 'ERROR_CODE', value: "0"],
-                    [$class: 'StringParameterValue', name: 'ERROR_SUMMARY', value: ""],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_START_TIME', value: "${taskStartTimeInMillis}"],
-                    [$class: 'StringParameterValue', name: 'PIPELINE_RUN_END_TIME', value: "${taskFinishTimeInMillis}"],
-                    [$class: 'StringParameterValue', name: 'CLONE_CODE_DURATION', value: "${checkout_duration_seconds}"],
-                    [$class: 'StringParameterValue', name: 'COMPILE_DURATION', value: "${compile_duration_seconds}"],
-                    [$class: 'StringParameterValue', name: 'UPLOAD_PACKAGE_DURATION', value: "${upload_duration_seconds}"],
-                    [$class: 'StringParameterValue', name: 'BINARY_DOWNLOAD_URL', value: "${FILE_SERVER_URL}/download/${OUTPUT_BINARY}"],
-            ]
     }
 }
+
