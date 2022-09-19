@@ -22,22 +22,22 @@ properties([
                 choice(choices: ['linux', 'darwin'],name: 'OS'),
                 choice(choices: ['community', 'enterprise'],name: 'EDITION'),
                 string(
-                        defaultValue: 'builds/debug-to-delete/tidb/62480cf19b4d7f6821f82c9cee272c096e9fec52/centos7/tidb-linux-amd64.tar.gz',
+                        defaultValue: '',
                         name: 'OUTPUT_BINARY',
                         trim: true
                 ),
                 string(
-                        defaultValue: 'tidb',
+                        defaultValue: '',
                         name: 'REPO',
                         trim: true
                 ),
                 string(
-                        defaultValue: 'tidb',
+                        defaultValue: '',
                         name: 'PRODUCT',
                         trim: true,
                 ),
                 string(
-                        defaultValue: '62480cf19b4d7f6821f82c9cee272c096e9fec52',
+                        defaultValue: '',
                         name: 'GIT_HASH',
                         trim: true
                 ),
@@ -47,12 +47,12 @@ properties([
                         trim: true
                 ),
                 string(
-                        defaultValue: 'v6.3.0-alpha',
+                        defaultValue: '',
                         name: 'RELEASE_TAG',
                         trim: true
                 ),
                 string(
-                        defaultValue: 'master',
+                        defaultValue: '',
                         name: 'TARGET_BRANCH', 
                         trim: true
                 ),
@@ -104,7 +104,7 @@ def get_golang_build_pod_params(goversion, arch) {
     def pod_image = ""
     def request_cpu = "4000m"
     def request_memory = "8Gi"
-    def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+    def jnlp_image = "jenkins/inbound-agent:4.3-4"
     def namespace = "jenkins-cd"
     def cluster_name = "kubernetes"
 
@@ -163,7 +163,7 @@ def get_rust_build_pod_params(product, arch) {
     def pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.13_rust:latest"
     def request_cpu = "8000m"
     def request_memory = "20Gi"
-    def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+    def jnlp_image = "jenkins/inbound-agent:4.3-4"
     def namespace = "jenkins-cd"
     def cluster_name = "kubernetes"
 
@@ -226,7 +226,7 @@ def get_tiflash_build_pod_params(arch) {
         def pod_image = get_tiflash_image("linux", arch)
         def request_cpu = "10000m"
         def request_memory = "20Gi"
-        def jnlp_image = "jenkins/inbound-agent:4.11-1-jdk11"
+        def jnlp_image = "jenkins/inbound-agent:4.3-4"
         def namespace = "jenkins-cd"
         def cluster_name = "kubernetes"
 
@@ -338,7 +338,9 @@ def checkoutCode() {
         repo_git_url = "git@github.com:pingcap-inc/${REPO}.git"
     }
     println "specRef: ${specRef}"
-    sh "git version"
+    // sh "git version && which git"
+    // sh "echo UID \$UID"
+    // sh "pwd && ls -alh"
     checkout changelog: false, poll: true,
                     scm: [$class: 'GitSCM', branches: [[name: "${GIT_HASH}"]], doGenerateSubmoduleConfigurations: false,
                         extensions: [[$class: 'CheckoutOption', timeout: 30],
@@ -409,7 +411,6 @@ def package_binary() {
 }
 
 def start_work() {
-    checkoutCode()
     withCredentials([string(credentialsId: 'sre-bot-token', variable: 'TOKEN')]) {
         compileStartTimeInMillis = System.currentTimeMillis()
         sh buildsh[product]
@@ -432,7 +433,7 @@ println "binPath: ${binPath}"
 
 
 product_go_array = ["tidb", "pd", "tidb-binlog", "tidb-tools", "ticdc", "dm", "br", "dumpling", "ng-monitoring", "tidb-enterprise-tools", "monitoring", "tidb-test", "enterprise-plugin"]
-product_rust_array = []
+product_rust_array = ["tikv", "importer"]
 
 // define build script here.
 TARGET = "output" 
@@ -987,6 +988,56 @@ spec:
           fieldPath: status.hostIP
 ''' 
 
+podVolumes = [
+    emptyDirVolume(mountPath: '/tmp', memory: false),
+    emptyDirVolume(mountPath: '/go', memory: false),
+    emptyDirVolume(mountPath: '/home/jenkins', memory: false),
+]
+if (product in product_go_array) {
+    pod_volumes = [
+        emptyDirVolume(mountPath: '/tmp', memory: false),
+        emptyDirVolume(mountPath: '/home/jenkins', memory: false),
+        emptyDirVolume(mountPath: '/go', memory: false),
+        nfsVolume(mountPath: '/nfs/cache', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs', readOnly: false),
+        nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
+    ]
+}
+if (product in ["tics", "tiflash"]) {
+    pod_volumes = [
+        emptyDirVolume(mountPath: '/tmp', memory: false),
+        emptyDirVolume(mountPath: '/home/jenkins', memory: false),
+        nfsVolume(mountPath: '/rust', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/tiflash/rust-cd', readOnly: false),
+        nfsVolume(mountPath: '/nfs/cache', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs', readOnly: false),
+        nfsVolume(mountPath: '/home/jenkins/agent/git', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
+        nfsVolume(mountPath: '/rust/git/db', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/git/db', readOnly: false),
+        nfsVolume(mountPath: '/rust/git/checkouts', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/git/checkouts', readOnly: false),
+    ] 
+}
+if (product in product_rust_array) {
+    pod_volumes = [
+        emptyDirVolume(mountPath: '/tmp', memory: false),
+        emptyDirVolume(mountPath: '/home/jenkins', memory: false),
+        emptyDirVolume(mountPath: '/go', memory: false),
+        nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/git', readOnly: false),
+        nfsVolume(mountPath: '/rust/registry/cache', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/registry/cache', readOnly: false),
+        nfsVolume(mountPath: '/rust/registry/index', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/registry/index', readOnly: false),
+        nfsVolume(mountPath: '/rust/git/db', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/git/db', readOnly: false),
+        nfsVolume(mountPath: '/rust/git/checkouts', serverAddress: '172.16.5.22',
+            serverPath: '/mnt/ci.pingcap.net-nfs/rust/git/checkouts', readOnly: false),
+    ] 
+}
+
 
 podTemplate(label: "${JOB_NAME}-${BUILD_NUMBER}", 
     namespace: "jenkins-cd", 
@@ -1009,6 +1060,7 @@ podTemplate(label: "${JOB_NAME}-${BUILD_NUMBER}",
                 def nodeLabel = get_baremetal_agent_node(params.OS, params.ARCH, params.PRODUCT)
                 println "use baremeta agent: ${nodeLabel}"
                 node(nodeLabel) {
+                    checkoutCode()
                     start_work()
                 }
             } else {
@@ -1040,14 +1092,12 @@ podTemplate(label: "${JOB_NAME}-${BUILD_NUMBER}",
                             resourceRequestCpu: "${pod_params.request_cpu}",
                             resourceRequestMemory: "${pod_params.request_memory}",
                             envVars: [containerEnvVar(key: 'GOPATH', value: '/go')],
-                        )
+                        ),
                     ], 
-                    volumes: [
-                        emptyDirVolume(mountPath: '/tmp', memory: false),
-                        emptyDirVolume(mountPath: '/go', memory: false)
-                    ]) {
+                    volumes: podVolumes) {
                         node(label) {
                             container("build") {
+                                checkoutCode()
                                 start_work()
                             }
                         }
