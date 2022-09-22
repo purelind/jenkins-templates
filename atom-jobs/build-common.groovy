@@ -163,7 +163,7 @@ def String needUpgradeGoVersion(String tag,String branch) {
 }
 
 def goBuildPod = "build_go1190"
-def GO_BIN_PATH = "/usr/local/go1.19/bin"
+def GO_BIN_PATH = "/usr/local/go1.19.1/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 // tidb-tools only use branch master and use newest go version
 if (REPO != "tidb-tools") {
