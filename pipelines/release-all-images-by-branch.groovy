@@ -82,7 +82,7 @@ HARBOR_PROJECT_PREFIX = "hub.pingcap.net/qa"
 
 
 // for master branch: use default local tag: v6.1.0-nightly
-RELEASE_TAG = "v6.3.0-alpha"
+RELEASE_TAG = "v6.4.0-alpha"
 if (GIT_BRANCH.startsWith("release-")) {
     RELEASE_TAG = "v" + trimPrefix(GIT_BRANCH) + ".0-nightly"
 }
