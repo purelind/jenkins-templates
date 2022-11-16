@@ -87,7 +87,7 @@ cd monitoring/
 mv Dockerfile Dockerfile.bak || true
 curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 cat Dockerfile
-docker build  -t ${imagePlaceHolder} .
+docker build --pull  -t ${imagePlaceHolder} .
 """
 
 buildImgagesh["tics"] = """
@@ -96,10 +96,10 @@ curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFI
 cat Dockerfile
 if [[ "${RELEASE_TAG}" == "" ]]; then
     # No release tag, the image may be used in testings
-    docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
+    docker build --pull -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
 else
     # Release tag provided, do not install test utils
-    docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=0
+    docker build --pull -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=0
 fi
 """
 
@@ -109,21 +109,21 @@ curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFI
 cat Dockerfile
 if [[ "${RELEASE_TAG}" == "" ]]; then
     # No release tag, the image may be used in testings
-    docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
+    docker build --pull -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=1
 else
     # Release tag provided, do not install test utils
-    docker build -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=0
+    docker build --pull -t ${imagePlaceHolder} . --build-arg INSTALL_MYSQL=0
 fi
 """
 
 
 buildImgagesh["monitoring"] = """
-docker build -t ${imagePlaceHolder} .
+docker build --pull -t ${imagePlaceHolder} .
 """
 
 buildImgagesh["tiem"] = """
 cp /usr/local/go/lib/time/zoneinfo.zip ./
-docker build  -t ${imagePlaceHolder} .
+docker build --pull  -t ${imagePlaceHolder} .
 """
 
 buildImgagesh["tidb"] = """
@@ -141,7 +141,7 @@ fi
 mv Dockerfile Dockerfile.bak || true
 curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
 cat Dockerfile
-docker build  -t ${imagePlaceHolder} .
+docker build --pull  -t ${imagePlaceHolder} .
 """
 
 
@@ -160,7 +160,7 @@ def build_image() {
         mv Dockerfile Dockerfile.bak || true
         curl -C - --retry 5 --retry-delay 6 --retry-max-time 60 -o Dockerfile ${DOCKERFILE}
         cat Dockerfile
-        docker build  -t ${imagePlaceHolder} .
+        docker build --pull  -t ${imagePlaceHolder} .
         """
     }
 }
