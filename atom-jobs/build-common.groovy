@@ -143,7 +143,7 @@ def String needUpgradeGoVersion(String tag,String branch) {
         return "go1.16"
     }
     // special for v6.1 larger than patch 3
-    if (tag.startsWith("v6.1") && tag >= "v6.1.3") {
+    if (tag.startsWith("v6.1") && tag >= "v6.1.3" || tag=="v6.1.0-nightly") {
         return "go1.19"
     }
     if (tag.startsWith("v") && tag >= "v6.0" && tag < "v6.3") {
