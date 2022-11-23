@@ -113,6 +113,7 @@ if (params.FAILPOINT) {
 
 // check if binary already has been built. 
 def ifFileCacheExists() {
+    // return false // to re-run force build
     if (params.FORCE_REBUILD){
         return false
     } 
@@ -141,6 +142,10 @@ def String needUpgradeGoVersion(String tag,String branch) {
     if (tag.startsWith("v") && tag > "v5.1" && tag < "v6.0") {
         return "go1.16"
     }
+    // special for v6.1 larger than patch 3
+    if (tag.startsWith("v6.1") && tag >= "v6.1.3") {
+        return "go1.19"
+    }
     if (tag.startsWith("v") && tag >= "v6.0" && tag < "v6.3") {
         return "go1.18"
     }
@@ -149,6 +154,10 @@ def String needUpgradeGoVersion(String tag,String branch) {
     }
     if (branch.startsWith("release-") && branch >= "release-5.1" && branch < "release-6.0"){
         return "go1.16"
+    }
+    // special for release-6.1 later versions
+    if (branch == "release-6.1"){
+        return "go1.19"
     }
     if (branch.startsWith("release-") && branch >= "release-6.0" && branch < "release-6.3"){
         return "go1.18"
@@ -163,7 +172,7 @@ def String needUpgradeGoVersion(String tag,String branch) {
 }
 
 def goBuildPod = "build_go1190"
-def GO_BIN_PATH = "/usr/local/go1.19.2/bin"
+def GO_BIN_PATH = "/usr/local/go1.19.3/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 // tidb-tools only use branch master and use newest go version
 if (REPO != "tidb-tools") {
@@ -209,7 +218,7 @@ if (params.PRODUCT == "tics") {
     containerLabel = "tiflash"
 } 
 if (params.ARCH == "arm64" && params.OS == "linux" && !useArmPod) {
-    binPath = "/usr/local/node/bin:/root/.cargo/bin:/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:${GO_BIN_PATH}"
+    binPath = "${GO_BIN_PATH}:/usr/local/node/bin:/root/.cargo/bin:/usr/lib64/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin"
     nodeLabel = "arm"
     containerLabel = ""
     if (params.PRODUCT == "tics"){
@@ -218,13 +227,13 @@ if (params.ARCH == "arm64" && params.OS == "linux" && !useArmPod) {
     }
 }
 if (params.OS == "darwin" && params.ARCH == "amd64") {
-    binPath = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${GO_BIN_PATH}:/usr/local/opt/binutils/bin/"
+    binPath = "${GO_BIN_PATH}:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:/usr/local/opt/binutils/bin/"
     nodeLabel = "mac"
     containerLabel = ""
 }
 
 if (params.OS == "darwin" && params.ARCH == "arm64") {
-    binPath = "/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:${GO_BIN_PATH}:/usr/local/opt/binutils/bin/"
+    binPath = "${GO_BIN_PATH}:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/pingcap/.cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/pingcap/.cargo/bin:/usr/local/opt/binutils/bin/"
     nodeLabel = "mac-arm"
     containerLabel = ""
     if (params.PRODUCT == "tics"){
