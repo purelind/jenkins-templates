@@ -527,7 +527,11 @@ else
     mkdir -p ${TARGET}/dm-ansible/conf
     mkdir -p ${TARGET}/dm-ansible/scripts
     cp -r dm/metrics/alertmanager/dm_worker.rules.yml ${TARGET}/dm-ansible/conf
-    cp -r dm/metrics/grafana/* ${TARGET}/dm-ansible/scripts
+    if [[ -d "dm/metrics/grafana" ]]; then
+        cp -r dm/metrics/grafana/* ${TARGET}/dm-ansible/scripts
+    else
+        cp -r metrics/grafana/DM-* ${TARGET}/dm-ansible/scripts
+    fi;
 fi;
 # start from v6.0.0(include v6.0.0), pingcap/dm-monitor-initializer is replace by pingcap/monitoring
 # link https://github.com/pingcap/monitoring/pull/188.
