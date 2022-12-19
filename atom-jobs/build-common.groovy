@@ -114,16 +114,20 @@ if (params.FAILPOINT) {
 // check if binary already has been built. 
 def ifFileCacheExists() {
     // return false // to re-run force build
-    if (params.FORCE_REBUILD){
-        return false
-    } 
-    result = sh(script: "curl -I ${FILE_SERVER_URL}/download/${OUTPUT_BINARY} -X \"HEAD\"|grep \"200 OK\"", returnStatus: true)
-    // result equal 0 mean cache file exists
-    if (result == 0) {
-        echo "file ${FILE_SERVER_URL}/download/${OUTPUT_BINARY} found in cache server,skip build again"
-        return true
+    node("$GO_BUILD_SLAVE") { 
+        container("golang") {
+            if (params.FORCE_REBUILD){
+                return false
+            } 
+            result = sh(script: "curl -I ${FILE_SERVER_URL}/download/${OUTPUT_BINARY} -X \"HEAD\"|grep \"200 OK\"", returnStatus: true)
+            // result equal 0 mean cache file exists
+            if (result == 0) {
+                echo "file ${FILE_SERVER_URL}/download/${OUTPUT_BINARY} found in cache server,skip build again"
+                return true
+            }
+            return false
+        }
     }
-    return false
 }
 
 // support branch example
@@ -861,11 +865,6 @@ def packageBinary() {
 }
 
 def release(product, label) {
-    // if has built,skip build.
-    if (ifFileCacheExists()) {
-        return
-    }
-
     checkoutStartTimeInMillis = System.currentTimeMillis()
     checkoutCode()
     checkoutFinishTimeInMillis = System.currentTimeMillis()
@@ -957,18 +956,20 @@ def run_with_arm_go_pod(Closure body) {
 
 try {
     stage("Build ${PRODUCT}") {
-        if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64" &&  params.OS == "linux") {
-            run_with_arm_go_pod{
-                dir("go/src/github.com/pingcap/${PRODUCT}") {
-                    deleteDir()
-                    release(PRODUCT, containerLabel)
+        if (!ifFileCacheExists()) { 
+            if (params.PRODUCT in ["tidb", "enterprise-plugin"] && params.ARCH == "arm64" &&  params.OS == "linux") {
+                run_with_arm_go_pod{
+                    dir("go/src/github.com/pingcap/${PRODUCT}") {
+                        deleteDir()
+                        release(PRODUCT, containerLabel)
+                    }
                 }
-            }
-        } else {
-            node(nodeLabel) {
-                dir("go/src/github.com/pingcap/${PRODUCT}") {
-                    deleteDir()
-                    release(PRODUCT, containerLabel)
+            } else {
+                node(nodeLabel) {
+                    dir("go/src/github.com/pingcap/${PRODUCT}") {
+                        deleteDir()
+                        release(PRODUCT, containerLabel)
+                    }
                 }
             }
         }
