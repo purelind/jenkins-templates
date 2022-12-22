@@ -194,6 +194,10 @@ if (REPO == "tidb-tools" && RELEASE_TAG < "v5.3") {
             goBuildPod = "${GO_BUILD_SLAVE}"
             GO_BIN_PATH = "/usr/local/go/bin"
             break
+        case "go1.19":
+            goBuildPod = "build_go1190"
+            GO_BIN_PATH = "/usr/local/go1.19.3/bin"
+            break
         default:
             throw new Exception("go version ${goVersion} not supported")
     }
