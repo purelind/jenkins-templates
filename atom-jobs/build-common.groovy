@@ -869,14 +869,10 @@ def packageBinary() {
 }
 
 def release(product, label) {
-    if (label != '') {
-        container(label) {
-            checkoutStartTimeInMillis = System.currentTimeMillis()
-            checkoutCode()
-            checkoutFinishTimeInMillis = System.currentTimeMillis()
-        }
-    }
-    
+    checkoutStartTimeInMillis = System.currentTimeMillis()
+    checkoutCode()
+    checkoutFinishTimeInMillis = System.currentTimeMillis()
+
     if (PRODUCT == 'tics') {
         if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
             def image_tag_suffix = ""
@@ -957,9 +953,7 @@ def run_with_arm_go_pod(Closure body) {
     ) {
         node(label) {
             println "debug command:\nkubectl -n ${namespace} exec -ti ${NODE_NAME} bash"
-            container("golang") {
-                body()
-            }
+            body()
         }
     }
 }
