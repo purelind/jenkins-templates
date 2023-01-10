@@ -869,14 +869,16 @@ def packageBinary() {
 }
 
 def release(product, label) {
+    checkoutStartTimeInMillis = System.currentTimeMillis()
     if (label != '') {
         container(label) {
-            checkoutStartTimeInMillis = System.currentTimeMillis()
             checkoutCode()
-            checkoutFinishTimeInMillis = System.currentTimeMillis()
         }
+    } else {
+        checkoutCode()
     }
-    
+    checkoutFinishTimeInMillis = System.currentTimeMillis()
+
     if (PRODUCT == 'tics') {
         if (fileExists('release-centos7-llvm/scripts/build-release.sh') && params.OS != "darwin") {
             def image_tag_suffix = ""
