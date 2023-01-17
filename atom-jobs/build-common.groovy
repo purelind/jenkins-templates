@@ -176,7 +176,7 @@ def String needUpgradeGoVersion(String tag,String branch) {
 }
 
 def goBuildPod = "build_go1190"
-def GO_BIN_PATH = "/usr/local/go1.19.3/bin"
+def GO_BIN_PATH = "/usr/local/go1.19.5/bin"
 goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 // tidb-tools only use branch master and use newest go version
 // only for version >= v5.3.0
@@ -196,7 +196,7 @@ if (REPO == "tidb-tools" && RELEASE_TAG < "v5.3") {
             break
         case "go1.19":
             goBuildPod = "build_go1190"
-            GO_BIN_PATH = "/usr/local/go1.19.3/bin"
+            GO_BIN_PATH = "/usr/local/go1.19.5/bin"
             break
         default:
             throw new Exception("go version ${goVersion} not supported")
