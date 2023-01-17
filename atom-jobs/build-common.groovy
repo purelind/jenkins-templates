@@ -320,6 +320,28 @@ def checkoutCode() {
                                             refspec      : specRef,
                                             url          : repo]]]
     sh 'test -z "$(git status --porcelain)"'
+    if(params.PRODUCT == 'enterprise-plugin'){
+		container("golang"){
+            sh """
+			cd ../
+            curl -O ${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-tidb.tar.gz
+            tar -xf src-tidb.tar.gz
+			rm -f src-tidb.tar.gz
+            """
+        }
+        dir('../tidb'){
+            checkout changelog: false, poll: true,
+                    scm: [$class: 'GitSCM', branches: [[name: "${TIDB_HASH}"]], doGenerateSubmoduleConfigurations: false,
+                        extensions: [[$class: 'CheckoutOption', timeout: 30],
+                                    [$class: 'CloneOption', timeout: 60],
+                                    [$class: 'PruneStaleBranch'],
+                                    [$class: 'SubmoduleOption', timeout: 30, disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, trackingSubmodules: false, reference: ''],
+                                    [$class: 'CleanBeforeCheckout']], submoduleCfg: [],
+                        userRemoteConfigs: [[credentialsId: 'github-sre-bot-ssh',
+                                            refspec      : specRef,
+                                            url          : 'git@github.com:pingcap/tidb.git']]]
+        }
+    }
 }
 
 
@@ -814,11 +836,7 @@ if [ "${OS}" == 'darwin' ]; then
 fi;
 go version
 cd ../
-rm -rf tidb
-curl -O ${FILE_SERVER_URL}/download/cicd/daily-cache-code/src-tidb.tar.gz
-tar -xf src-tidb.tar.gz
 cd tidb
-git fetch --all
 git reset --hard ${TIDB_HASH}
 cd cmd/pluginpkg
 go build 
@@ -864,6 +882,8 @@ def packageBinary() {
         cd ${TARGET}
         tar --exclude=${TARGET}.tar.gz -czvf ${TARGET}.tar.gz *
         curl -F ${OUTPUT_BINARY}=@${TARGET}.tar.gz ${FILE_SERVER_URL}/upload
+        sha256sum ${TARGET}.tar.gz | cut -d ' ' -f 1 >${TARGET}.tar.gz.sha256
+        curl -F ${OUTPUT_BINARY}.sha256=@${TARGET}.tar.gz.sha256 ${FILE_SERVER_URL}/upload
         """
     }
 }
