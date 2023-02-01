@@ -203,26 +203,6 @@ def parseBuildInfo(repo) {
     }
     println "repo: ${repo}, actualRepo: ${actualRepo}, sha1: ${sha1}"
 
-    // tics need use tiflash dockerfile
-    // tics has not  failpoint or debug image.
-    //  repo support enable failpoint: tidb / tikv / pd / br
-    //  repo support support debug image(amd64): br / dumpling / pd / ticdc / tidb / tidb-binlog / tidb-lightning / tikv
-    // if (repo == "tics") {
-    //     imageName = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH},${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}"
-    //     imageNameAmd64 = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-amd64,${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-amd64"
-    //     imageNameArm64 = "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-arm64,${HARBOR_PROJECT_PREFIX}/tiflash:${GIT_BRANCH}-arm64"
-    // }
-
-
-    // def imageName = ""
-    // def imageNameEnableFailpoint = ""
-    // def imageNameForDebug = ""
-    // def imageNameForDebugEnableFailpoint = ""
-    // def imageNameAmd64 = ""
-    // def imageNameArm64 = ""\
-
-    // builds/pingcap/test/tidb/3e1cd2733a8e43670b25e7b2e53001eccac78147/centos7/tidb-linux-arm64.tar.gz
-
     def binaryAmd64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64.tar.gz"
     def binaryArm64 = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-arm64.tar.gz"
     def binaryAmd64Failpoint = "builds/pingcap/qa-daily-image-build/${repo}/${GIT_BRANCH}/${sha1}/centos7/${repo}-linux-amd64-failpoint.tar.gz"
@@ -231,17 +211,9 @@ def parseBuildInfo(repo) {
     if (repo == "tics-debug") {
         repo = "tics"
     }
-    def dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/${repo}"
-    def dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}"
+    def dockerfileAmd64 = get_dockerfile_url('amd64', repo, false)
+    def dockerfileArm64 = get_dockerfile_url('arm64', repo, false)
 
-    if (repo == "tics") {
-        dockerfileAmd64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-amd64/tiflash"
-        dockerfileArm64 = "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/tiflash"
-    }
-    // if (repo == "tiflash") {
-    //     binaryAmd64 = "builds/pingcap/tics/test/${GIT_BRANCH}/${sha1}/linux-amd64/tics.tar.gz"
-    //     binaryArm64 = "builds/pingcap/test/tics/${sha1}/centos7/tics-linux-arm64.tar.gz"
-    // }
     if (repo == "tidb-lightning") {
         // Notice: the code of br has been merged to tidb from release-5.2, so we need to use tidb binary
         // tar package of tidb build by atom-job include these binaries:
@@ -263,7 +235,7 @@ def parseBuildInfo(repo) {
             "binaryArm64Failpoint"            : binaryArm64Failpoint,
             "dockerfileAmd64"                 : dockerfileAmd64,
             "dockerfileArm64"                 : dockerfileArm64,
-            "dockerfileForDebugAmd64"         : "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${repo}",
+            "dockerfileForDebugAmd64"         : get_dockerfile_url('amd64',repo,true),
             // "dockerfileForDebugArm64": "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-arm64/${repo}",  // TODO: arm64 have not unique debug image Dockerfile
             "imageName"                       : "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}",
             "imageNameEnableFailpoint"        : "${HARBOR_PROJECT_PREFIX}/${repo}:${GIT_BRANCH}-failpoint",
@@ -274,6 +246,21 @@ def parseBuildInfo(repo) {
     ]
 }
 
+def get_dockerfile_url(arch, repo, isDebug){
+    def Product = repo
+    if (repo == 'tics'){
+        Product = 'tiflash'
+    }
+    def fileName = Product
+    if (RELEASE_TAG >='v6.6.0'){
+        return "https://raw.githubusercontent.com/PingCAP-QE/artifacts/main/dockerfiles/${fileName}.Dockerfile"
+    }else{
+        if (isDebug){
+            return "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/debug-image/${fileName}"
+        }
+        return "https://raw.githubusercontent.com/PingCAP-QE/ci/main/jenkins/Dockerfile/release/linux-${arch}/${fileName}"
+    }
+}
 
 def release_one_normal(repo) {
     def buildInfo = parseBuildInfo(repo)
