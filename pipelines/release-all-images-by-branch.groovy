@@ -545,6 +545,9 @@ def release_master_monitoring() {
     }
     def binary = "builds/pingcap/monitoring/test/master/${sha1}/linux-amd64/monitoring.tar.gz"
     def arch = "amd64"
+    // The monitoring cmd tool fetches all the monitoring json from each repo, so we don't use 
+    // cache and force a rebuild each time
+    // releate to: https://github.com/pingcap/monitoring/tree/master/cmd
     def paramsBuild = [
             string(name: "ARCH", value: arch),
             string(name: "OS", value: "linux"),
@@ -555,7 +558,7 @@ def release_master_monitoring() {
             string(name: "GIT_HASH", value: sha1),
             string(name: "RELEASE_TAG", value: "master"),
             string(name: "TARGET_BRANCH", value: "master"),
-            [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+            [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: true],
     ]
     println "paramsBuild: ${paramsBuild}"
 
@@ -575,7 +578,7 @@ def release_master_monitoring() {
             string(name: "GIT_HASH", value: sha1),
             string(name: "RELEASE_TAG", value: "master"),
             string(name: "TARGET_BRANCH", value: "master"),
-            [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: FORCE_REBUILD],
+            [$class: 'BooleanParameterValue', name: 'FORCE_REBUILD', value: true],
     ]
     println "paramsBuild: ${paramsBuildArm}"
 
