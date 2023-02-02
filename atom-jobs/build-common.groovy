@@ -183,8 +183,8 @@ goVersion = needUpgradeGoVersion(params.RELEASE_TAG,params.TARGET_BRANCH)
 if (REPO == "tidb-tools" && RELEASE_TAG < "v5.3") {
     switch (goVersion) {
         case "go1.18":
-            goBuildPod = "build_go1185"
-            GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+            goBuildPod = "build_go1180"
+            GO_BIN_PATH = "/usr/local/go1.18.10/bin"
             break
         case "go1.16":
             goBuildPod = "${GO1160_BUILD_SLAVE}"
@@ -204,8 +204,8 @@ if (REPO == "tidb-tools" && RELEASE_TAG < "v5.3") {
 } 
 if (REPO != "tidb-tools") {
     if (goVersion == "go1.18") {
-        goBuildPod = "build_go1185"
-        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
+        goBuildPod = "build_go1180"
+        GO_BIN_PATH = "/usr/local/go1.18.10/bin"
 
     }
     if (goVersion == "go1.16") {
@@ -219,12 +219,12 @@ if (REPO != "tidb-tools") {
     }
 }
 // workaround for v 5.3.3 tidb-tools,
-// need use go1.18.5 to build tidb-tools
+// need use go1.18.10 to build tidb-tools
 // revert this after  v5.3.3 ga
 if (REPO == "tidb-tools" && RELEASE_TAG == "v5.3.3" && GIT_HASH == "cf6b7a8ae4b5849a6155634352b3712059defb48") {
-        goBuildPod = "build_go1185"
-        GO_BIN_PATH = "/usr/local/go1.18.5/bin"
-        println "tidb-tools v5.3.3 use go1.18.5 to build"
+        goBuildPod = "build_go1180"
+        GO_BIN_PATH = "/usr/local/go1.18.10/bin"
+        println "tidb-tools v5.3.3 use go1.18.10 to build"
 }
 
 // choose which node to use.
@@ -942,7 +942,7 @@ def run_with_arm_go_pod(Closure body) {
             arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.16-arm64:latest"
             break
         case "go1.18":
-            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18.5-arm64:latest"
+            arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.18-arm64:latest"
             break
         case "go1.19":
             arm_go_pod_image = "hub.pingcap.net/jenkins/centos7_golang-1.19-arm64:latest"
