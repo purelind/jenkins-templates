@@ -288,21 +288,7 @@ def runPipeline(PipelineSpec pipeline, String triggerEvent, String branch, Strin
         def resultJson = groovy.json.JsonOutput.toJson(notify_results_array)
         writeJSON file: 'ciResult.json', json: resultJson, pretty: 4
         sh 'cat ciResult.json'
-        archiveArtifacts artifacts: 'ciResult.json', fingerprint: true
-        if (params.notifyPolicy && params.notifyPolicy == "always") {
-            println "notify policy is always"
-            sh """
-                wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline.py
-                python3 agent-tipipeline.py ciResult.json
-            """ 
-        } else if (currentBuild.result == "FAILURE") {
-            sh """
-                wget ${FILE_SERVER_URL}/download/rd-atom-agent/agent-tipipeline.py
-                python3 agent-tipipeline.py ciResult.json
-            """  
-        } else {
-            println("Notify disabled")
-        }  
+        archiveArtifacts artifacts: 'ciResult.json', fingerprint: true 
     }
 
 }
