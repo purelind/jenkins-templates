@@ -79,8 +79,6 @@ def run_with_pod(Closure body) {
                             resourceRequestCpu: '1000m', resourceRequestMemory: '2Gi',
                             resourceLimitCpu: '20000m', resourceLimitMemory: "20Gi",
                             command: '/bin/sh -c', args: 'cat',
-                            // envVars: [containerEnvVar(key: 'GOMODCACHE', value: '/nfs/cache/mod'),
-                            //           containerEnvVar(key: 'GOPATH', value: '/go')],
                             envVars:[containerEnvVar(key: 'GOPATH', value: '/go')],
                     ),
                     containerTemplate(
@@ -91,8 +89,6 @@ def run_with_pod(Closure body) {
             volumes: [
                     nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: "${NFS_SERVER_ADDRESS}",
                             serverPath: '/data/nvme1n1/nfs/git', readOnly: false),
-                    // nfsVolume(mountPath: '/nfs/cache', serverAddress: "${NFS_SERVER_ADDRESS}",
-                    //         serverPath: '/data/nvme1n1/nfs', readOnly: false),
             ],
     ) {
         node(label) {

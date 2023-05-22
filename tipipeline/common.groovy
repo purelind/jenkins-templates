@@ -369,8 +369,6 @@ def runWithPod(TaskSpec config, Closure body) {
             volumes: [
                     nfsVolume(mountPath: '/home/jenkins/agent/ci-cached-code-daily', serverAddress: "${NFS_SERVER_ADDRESS}",
                             serverPath: '/data/nvme1n1/nfs/git', readOnly: false),
-                    nfsVolume(mountPath: '/nfs/cache', serverAddress: "${NFS_SERVER_ADDRESS}",
-                            serverPath: '/data/nvme1n1/nfs', readOnly: false),
             ],
     ) {
         try {
