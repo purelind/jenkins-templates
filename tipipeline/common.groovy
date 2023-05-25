@@ -77,6 +77,20 @@ class PipelineSpec {
 
 PIPELINE_RUN_API_ENDPOINT = "http://10.2.12.14:31848/pipelinerun"
 
+POD_YAML = '''
+apiVersion: v1
+kind: Pod
+spec:
+  nodeSelector:
+    enable-ci: true
+    ci-nvme-high-performance: true
+  tolerations:
+  - key: dedicated
+    operator: Equal
+    value: test-infra
+    effect: NoSchedule
+'''
+
 def loadPipelineConfig(fileURL, pullRequestAuthor, triggerAuthor) {
     ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory())
     objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,false)
@@ -351,6 +365,8 @@ def runWithPod(TaskSpec config, Closure body) {
     podTemplate(label: label,
             cloud: cloud,
             namespace: namespace,
+            yaml: POD_YAML,
+            yamlMergeStrategy: merge(),
             idleMinutes: 0,
             containers: [
                     containerTemplate(
