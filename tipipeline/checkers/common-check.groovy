@@ -23,9 +23,11 @@ def runBody = {config ->
         }
         
         stage("Download code from fileserver") {
-            sh """
-            curl ${config.cacheCodeURL} | tar xz --strip-components=1
-            """
+            retry(3) {
+                sh """
+                    curl ${config.cacheCodeURL} | tar xz --strip-components=1
+                """
+            }
         }
         stage("common task") {
             sh config.params["shellScript"]
